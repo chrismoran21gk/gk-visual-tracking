@@ -3,116 +3,263 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GK Visual Tracking (2D)</title>
+  <title>GK Visual Tracking — Xamax</title>
   <style>
-    html, body { margin:0; height:100%; background:#111; font-family: system-ui, -apple-system, Segoe UI, Roboto; }
-    #wrap { display:flex; height:100%; align-items:center; justify-content:center; }
-    canvas { background:#0b0b0b; border:1px solid #333; touch-action: manipulation; }
-
-    #hud {
-      position: fixed; left: 12px; top: 12px; color:#ddd; font-size: 14px;
-      background: rgba(0,0,0,.45); padding: 10px 12px; border-radius: 12px; border:1px solid #333;
-      max-width: 420px;
+    :root{
+      --xamax-red:#e10600;
+      --bg:#0b0b0b;
+      --panel: rgba(10,10,10,.72);
+      --stroke:#242424;
+      --text:#e9e9e9;
+      --muted:#bdbdbd;
     }
-    #hud b { color:#fff; }
-    #hud .row { margin: 8px 0; }
-    #hud kbd { background:#222; border:1px solid #444; padding:2px 6px; border-radius:6px; }
-    #bar { height: 6px; background:#222; border:1px solid #444; border-radius: 999px; overflow:hidden; }
-    #fill { height:100%; width:0%; background:#fff; }
-    button { margin-right: 6px; padding: 6px 10px; background:#1f1f1f; color:#eee; border:1px solid #444; border-radius:10px; }
-    button:hover { background:#2a2a2a; cursor:pointer; }
 
-    input[type="range"] { width: 220px; vertical-align: middle; }
-    .small { opacity:.85; font-size: 12px; line-height: 1.2; }
+    html, body { margin:0; height:100%; background:#070707; font-family: system-ui, -apple-system, Segoe UI, Roboto; color:var(--text); }
+    #wrap { display:flex; height:100%; align-items:center; justify-content:center; padding:12px; }
+    canvas { background:var(--bg); border:1px solid var(--stroke); border-radius:16px; touch-action: manipulation; }
+
+    /* Top bar */
+    #topbar{
+      position: fixed; left: 12px; right:12px; top: 12px;
+      display:flex; align-items:center; justify-content:space-between;
+      background: var(--panel);
+      border:1px solid var(--stroke);
+      border-radius: 16px;
+      padding: 10px 12px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+    #brand{ display:flex; align-items:center; gap:10px; min-width: 0; }
+    #brand img{ height:28px; width:auto; display:block; }
+    #brand .title{
+      font-weight: 800; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    #brand .subtitle{ font-size:12px; color:var(--muted); margin-top:1px; }
+
+    .btn{
+      padding: 8px 10px;
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border:1px solid var(--stroke);
+      border-radius: 12px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{ background: rgba(255,255,255,.10); }
+    .btn.primary{
+      background: rgba(225,6,0,.22);
+      border-color: rgba(225,6,0,.55);
+    }
+    .btn.primary:hover{ background: rgba(225,6,0,.30); }
+
+    /* Drawer / menu */
+    #drawer{
+      position: fixed; right: 12px; top: 64px;
+      width: 360px;
+      max-width: calc(100vw - 24px);
+      background: var(--panel);
+      border:1px solid var(--stroke);
+      border-radius: 16px;
+      padding: 12px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 10;
+      transform: translateY(-6px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .15s ease, transform .15s ease;
+    }
+    #drawer.open{
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .row{ margin: 10px 0; }
+    .rowline{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .label{ color: var(--muted); font-size:12px; }
+    .val{ font-weight: 800; }
+    input[type="range"]{ width: 220px; }
+    #mini{
+      position: fixed; left: 12px; bottom: 12px;
+      background: rgba(10,10,10,.55);
+      border:1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 10px 12px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 9;
+      max-width: calc(100vw - 24px);
+    }
+    #mini .kpi{ display:flex; gap:14px; flex-wrap:wrap; align-items:baseline; }
+    #mini b{ color:#fff; }
+    #bar { height: 6px; background: rgba(255,255,255,.08); border:1px solid var(--stroke); border-radius: 999px; overflow:hidden; margin-top:8px; }
+    #fill { height:100%; width:0%; background: var(--xamax-red); }
+    .hint{ font-size:12px; color: var(--muted); margin-top:6px; line-height: 1.25; }
+    kbd { background: rgba(255,255,255,.06); border:1px solid var(--stroke); padding:2px 6px; border-radius:8px; color:#fff; }
+
+    /* Small screens */
+    @media (max-width: 520px){
+      #drawer{ width: calc(100vw - 24px); }
+      input[type="range"]{ width: 200px; }
+    }
   </style>
 </head>
+
 <body>
   <div id="wrap">
     <canvas id="c" width="900" height="520"></canvas>
   </div>
 
-  <div id="hud">
-    <div class="row"><b>GK Visual Tracking</b> (2D) — DIY</div>
-
-    <div class="row">
-      <button id="startBtn">Nouvel essai</button>
-      <button id="revealBtn">Révéler</button>
+  <!-- Topbar -->
+  <div id="topbar">
+    <div id="brand">
+      <img id="logo" alt="Logo" />
+      <div style="min-width:0">
+        <div class="title">GK Visual Tracking</div>
+        <div class="subtitle">Mode Xamax — STOP → ESPACE révèle</div>
+      </div>
     </div>
-
-    <div class="row">Phase: <b id="phase">—</b></div>
-    <div class="row">Score: <b id="score">0</b> / <b id="trials">0</b></div>
-    <div class="row">Temps: <b id="time">0.00</b> s</div>
-    <div class="row" id="instr">Espace = nouvel essai. Quand STOP → Espace = révéler.</div>
-
-    <div class="row">
-      Vitesse: <b id="speedVal"></b>
-      <input id="speed" type="range" min="60" max="520" step="10" />
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="btn primary" id="startBtn">Nouvel essai</button>
+      <button class="btn" id="toggleBtn">☰</button>
     </div>
+  </div>
 
-    <div class="row">
-      Durée mouvement (s): <b id="moveVal"></b>
-      <input id="move" type="range" min="2" max="20" step="1" />
-    </div>
-
-    <div class="row">
-      Cible visible (ms): <b id="cueVal"></b>
-      <input id="cue" type="range" min="300" max="2500" step="100" />
+  <!-- Drawer -->
+  <div id="drawer">
+    <div class="rowline">
+      <div>
+        <div style="font-weight:800">Réglages</div>
+        <div class="label">Ajuste avant l’essai (ou entre essais)</div>
+      </div>
+      <button class="btn" id="revealBtn">Révéler</button>
     </div>
 
     <div class="row">
-      Nb objets: <b id="nVal"></b>
-      <input id="nDots" type="range" min="4" max="20" step="1" />
+      <div class="rowline">
+        <div>
+          <div class="label">Vitesse</div>
+          <div class="val"><span id="speedVal"></span></div>
+        </div>
+        <input id="speed" type="range" min="60" max="520" step="10" />
+      </div>
     </div>
 
     <div class="row">
-      Chaos: <b id="chaosVal"></b>
-      <input id="chaos" type="range" min="0" max="0.9" step="0.05" />
+      <div class="rowline">
+        <div>
+          <div class="label">Durée mouvement (s)</div>
+          <div class="val"><span id="moveVal"></span></div>
+        </div>
+        <input id="move" type="range" min="2" max="20" step="1" />
+      </div>
     </div>
 
-    <div id="bar"><div id="fill"></div></div>
+    <div class="row">
+      <div class="rowline">
+        <div>
+          <div class="label">Cible visible (ms)</div>
+          <div class="val"><span id="cueVal"></span></div>
+        </div>
+        <input id="cue" type="range" min="300" max="2500" step="100" />
+      </div>
+    </div>
 
-    <div class="row small">
+    <div class="row">
+      <div class="rowline">
+        <div>
+          <div class="label">Nb objets</div>
+          <div class="val"><span id="nVal"></span></div>
+        </div>
+        <input id="nDots" type="range" min="4" max="22" step="1" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rowline">
+        <div>
+          <div class="label">Chaos</div>
+          <div class="val"><span id="chaosVal"></span></div>
+        </div>
+        <input id="chaos" type="range" min="0" max="0.9" step="0.05" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="rowline">
+        <div>
+          <div class="label">Taille des boules</div>
+          <div class="val"><span id="radiusVal"></span> px</div>
+        </div>
+        <input id="radius" type="range" min="10" max="28" step="1" />
+      </div>
+    </div>
+
+    <div class="hint">
       Raccourcis: <kbd>Espace</kbd> nouvel essai • (en STOP) <kbd>Espace</kbd> révèle • <kbd>R</kbd> révèle
     </div>
   </div>
 
+  <!-- Mini HUD -->
+  <div id="mini">
+    <div class="kpi">
+      <div>Phase: <b id="phase">—</b></div>
+      <div>Essais: <b id="trials">0</b></div>
+      <div>Temps: <b id="time">0.00</b>s</div>
+    </div>
+    <div id="bar"><div id="fill"></div></div>
+  </div>
+
 <script>
 (() => {
+  // ===== LOGO PATH =====
+  // Mets ici le chemin exact du logo dans ton repo:
+  // ex: "assets/xamax.png" ou "xamax.png"
+  const LOGO_PATH = "assets/xamax.png";
+
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
 
-  // ====== PARAMÈTRES (modifiable via sliders) ======
+  const logoEl = document.getElementById('logo');
+  logoEl.src = LOGO_PATH;
+
+  // ====== PARAMÈTRES ======
   const CONFIG = {
     nDots: 10,
-    radius: 14,
+    radius: 18,        // boules plus grandes par défaut
     chaos: 0.35,
     speed: 260,
     showTargetMs: 900,
-    moveMs: 7000,     // durée de mouvement après la phase "cible visible"
+    moveMs: 7000,
     bounce: true,
   };
 
   // ====== UI ======
   const phaseEl = document.getElementById('phase');
-  const scoreEl = document.getElementById('score');
   const trialsEl = document.getElementById('trials');
   const timeEl = document.getElementById('time');
   const fillEl = document.getElementById('fill');
+
   const startBtn = document.getElementById('startBtn');
   const revealBtn = document.getElementById('revealBtn');
-  const instrEl = document.getElementById('instr');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const drawer = document.getElementById('drawer');
 
   const speedSlider = document.getElementById('speed');
   const moveSlider  = document.getElementById('move');
   const cueSlider   = document.getElementById('cue');
   const nSlider     = document.getElementById('nDots');
   const chaosSlider = document.getElementById('chaos');
+  const radiusSlider= document.getElementById('radius');
 
   const speedValEl = document.getElementById('speedVal');
   const moveValEl  = document.getElementById('moveVal');
   const cueValEl   = document.getElementById('cueVal');
   const nValEl     = document.getElementById('nVal');
   const chaosValEl = document.getElementById('chaosVal');
+  const radiusValEl= document.getElementById('radiusVal');
 
   function syncControlsFromConfig() {
     speedSlider.value = CONFIG.speed;
@@ -120,12 +267,14 @@
     cueSlider.value   = CONFIG.showTargetMs;
     nSlider.value     = CONFIG.nDots;
     chaosSlider.value = CONFIG.chaos;
+    radiusSlider.value= CONFIG.radius;
 
     speedValEl.textContent = CONFIG.speed;
     moveValEl.textContent  = (CONFIG.moveMs / 1000).toFixed(0);
     cueValEl.textContent   = CONFIG.showTargetMs;
     nValEl.textContent     = CONFIG.nDots;
     chaosValEl.textContent = CONFIG.chaos.toFixed(2);
+    radiusValEl.textContent= CONFIG.radius;
   }
 
   function applyControlsToConfig() {
@@ -134,43 +283,39 @@
     CONFIG.showTargetMs = parseInt(cueSlider.value, 10);
     CONFIG.nDots = parseInt(nSlider.value, 10);
     CONFIG.chaos = parseFloat(chaosSlider.value);
+    CONFIG.radius = parseInt(radiusSlider.value, 10);
 
     speedValEl.textContent = CONFIG.speed;
     moveValEl.textContent  = (CONFIG.moveMs / 1000).toFixed(0);
     cueValEl.textContent   = CONFIG.showTargetMs;
     nValEl.textContent     = CONFIG.nDots;
     chaosValEl.textContent = CONFIG.chaos.toFixed(2);
+    radiusValEl.textContent= CONFIG.radius;
   }
 
-  speedSlider.addEventListener('input', applyControlsToConfig);
-  moveSlider.addEventListener('input', applyControlsToConfig);
-  cueSlider.addEventListener('input', applyControlsToConfig);
-  nSlider.addEventListener('input', applyControlsToConfig);
-  chaosSlider.addEventListener('input', applyControlsToConfig);
+  [speedSlider, moveSlider, cueSlider, nSlider, chaosSlider, radiusSlider]
+    .forEach(el => el.addEventListener('input', applyControlsToConfig));
 
   // ====== état ======
   let dots = [];
   let targetId = 0;
-  let phase = 'idle'; // idle | cue | uniform | waiting | stopped | revealed
+  let phase = 'idle'; // idle | cue | waiting | stopped | revealed
   let t0 = 0;
   let last = 0;
-  let score = 0;
   let trials = 0;
-  let answerLocked = false;
   let reveal = false;
 
-  // couleurs
   const BG = '#0b0b0b';
   const DOT = '#e6e6e6';
-  const TARGET_CUE = '#ff3b30'; // cible différente au début
+  const TARGET_CUE = '#ff3b30';
   const REVEAL_OK = '#34c759';
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
   function resizeToFit() {
-    const maxW = window.innerWidth - 20;
-    const maxH = window.innerHeight - 20;
+    const maxW = window.innerWidth - 24;
+    const maxH = window.innerHeight - 24;
     const aspect = 900/520;
 
     let w = Math.min(900, maxW);
@@ -184,11 +329,9 @@
   resizeToFit();
 
   function initTrial() {
-    applyControlsToConfig(); // prend les réglages courants à chaque essai
-
+    applyControlsToConfig();
     trials++;
     trialsEl.textContent = trials;
-    answerLocked = false;
     reveal = false;
 
     const W = canvas.width, H = canvas.height;
@@ -207,30 +350,25 @@
     targetId = Math.floor(rand(0, CONFIG.nDots));
 
     phase = 'cue';
-    phaseEl.textContent = 'CIBLE VISIBLE';
-    instrEl.textContent = "Mémorise la cible (rouge), puis elle devient identique.";
+    phaseEl.textContent = 'CIBLE';
     t0 = performance.now();
     last = t0;
-
     requestAnimationFrame(loop);
   }
 
   function revealTarget() {
     reveal = true;
     phase = 'revealed';
-    phaseEl.textContent = 'RÉVÉLATION';
-    instrEl.textContent = "Cible révélée. Espace = nouvel essai.";
+    phaseEl.textContent = 'RÉVÉLÉ';
   }
 
   function step(dt) {
     const W = canvas.width, H = canvas.height;
 
     for (const d of dots) {
-      // errance (chaos)
       d.vx += rand(-1, 1) * CONFIG.chaos * 60;
       d.vy += rand(-1, 1) * CONFIG.chaos * 60;
 
-      // maintien vitesse
       const sp = Math.hypot(d.vx, d.vy) || 1;
       const desired = CONFIG.speed;
       d.vx = (d.vx / sp) * (desired + rand(-20, 20));
@@ -244,11 +382,6 @@
         if (d.x > W - CONFIG.radius) { d.x = W - CONFIG.radius; d.vx *= -1; }
         if (d.y < CONFIG.radius) { d.y = CONFIG.radius; d.vy *= -1; }
         if (d.y > H - CONFIG.radius) { d.y = H - CONFIG.radius; d.vy *= -1; }
-      } else {
-        if (d.x < -CONFIG.radius) d.x = W + CONFIG.radius;
-        if (d.x > W + CONFIG.radius) d.x = -CONFIG.radius;
-        if (d.y < -CONFIG.radius) d.y = H + CONFIG.radius;
-        if (d.y > H + CONFIG.radius) d.y = -CONFIG.radius;
       }
     }
   }
@@ -263,7 +396,6 @@
     const elapsed = (now - t0) / 1000;
     timeEl.textContent = elapsed.toFixed(2);
 
-    // barre = progression jusqu'au STOP
     const totalMsToStop = CONFIG.showTargetMs + CONFIG.moveMs;
     const p = clamp((now - t0) / totalMsToStop, 0, 1);
     fillEl.style.width = (p * 100).toFixed(1) + '%';
@@ -285,70 +417,49 @@
 
     ctx.fillStyle = 'rgba(255,255,255,.85)';
     ctx.font = '18px system-ui, -apple-system, Segoe UI, Roboto';
-
-    if (phase === 'cue') ctx.fillText('Cible visible (rouge)', 18, 32);
-    if (phase === 'uniform' || phase === 'waiting') ctx.fillText('Tout identique — suis la cible', 18, 32);
-    if (phase === 'stopped') ctx.fillText('STOP — appuie sur ESPACE pour révéler', 18, 32);
-    if (phase === 'revealed') ctx.fillText('Cible révélée', 18, 32);
+    if (phase === 'cue') ctx.fillText('Cible visible (rouge)', 18, 34);
+    if (phase === 'waiting') ctx.fillText('Tout identique — tracking', 18, 34);
+    if (phase === 'stopped') ctx.fillText('STOP — ESPACE pour révéler', 18, 34);
+    if (phase === 'revealed') ctx.fillText('Révélé', 18, 34);
   }
 
   function loop(now) {
     const dt = (now - last) / 1000;
     last = now;
-
     const ms = now - t0;
 
-    // cue -> uniform
     if (phase === 'cue' && ms >= CONFIG.showTargetMs) {
       phase = 'waiting';
-      phaseEl.textContent = 'TRACKING';
-      instrEl.textContent = "Tout est identique. Suis la cible jusqu'au STOP.";
+      phaseEl.textContent = 'TRACK';
     }
 
-    // mouvement uniquement tant que pas STOP
-    if (!answerLocked) {
-      if (phase === 'cue' || phase === 'waiting') step(dt);
-    }
+    if (phase === 'cue' || phase === 'waiting') step(dt);
 
-    // STOP après durée définie (showTargetMs + moveMs)
     if (phase === 'waiting' && ms >= (CONFIG.showTargetMs + CONFIG.moveMs)) {
       phase = 'stopped';
       phaseEl.textContent = 'STOP';
-      instrEl.textContent = "STOP — Appuie sur ESPACE pour révéler.";
     }
 
     draw(now);
-
     if (phase !== 'idle') requestAnimationFrame(loop);
   }
 
-  // Clique/tap = on désactive volontairement la réponse (tu voulais révélation coach)
-  // Si tu veux remettre le clic du gardien plus tard, dis-moi et je te le réactive proprement.
-
-  // Boutons
+  // UI interactions
+  toggleBtn.addEventListener('click', () => drawer.classList.toggle('open'));
   startBtn.addEventListener('click', initTrial);
-  revealBtn.addEventListener('click', () => {
-    if (phase === 'stopped' && !reveal) revealTarget();
-  });
+  revealBtn.addEventListener('click', () => { if (phase === 'stopped' && !reveal) revealTarget(); });
 
-  // Clavier
   document.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
-
     if (e.code === 'Space') {
       e.preventDefault();
-      if (phase === 'stopped' && !reveal) {
-        revealTarget();
-      } else {
-        initTrial();
-      }
-    }
-    if (k === 'r') {
       if (phase === 'stopped' && !reveal) revealTarget();
+      else initTrial();
     }
+    if (k === 'r') { if (phase === 'stopped' && !reveal) revealTarget(); }
+    if (k === 'm') drawer.classList.toggle('open'); // petit bonus
   });
 
-  // init UI + premier essai
   syncControlsFromConfig();
   applyControlsToConfig();
   initTrial();
