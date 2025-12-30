@@ -313,9 +313,26 @@
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
   function resizeToFit() {
-    const maxW = window.innerWidth - 24;
-    const maxH = window.innerHeight - 24;
-    const aspect = 900/520;
+  const topOffset = 90;   // place pour la top bar
+  const bottomOffset = 80; // place pour le mini HUD
+  const sideOffset = 24;
+
+  const maxW = window.innerWidth - sideOffset;
+  const maxH = window.innerHeight - topOffset - bottomOffset;
+
+  const aspect = 1200 / 720; // ratio du canvas
+
+  let w = maxW;
+  let h = w / aspect;
+
+  if (h > maxH) {
+    h = maxH;
+    w = h * aspect;
+  }
+
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+}
 
     let w = Math.min(900, maxW);
     let h = w / aspect;
