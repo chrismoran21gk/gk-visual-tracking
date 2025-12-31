@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GK Visual Tracking — Xamax</title>
+  <title>GK Visual Lab — Xamax</title>
   <style>
     :root{
       --xamax-red:#e10600;
@@ -13,12 +13,10 @@
       --text:#e9e9e9;
       --muted:#bdbdbd;
     }
-
     html, body { margin:0; height:100%; background:#070707; font-family: system-ui, -apple-system, Segoe UI, Roboto; color:var(--text); }
     #wrap { display:flex; height:100%; align-items:center; justify-content:center; padding:12px; }
-    canvas { background:var(--bg); border:1px solid var(--stroke); border-radius:16px; touch-action: manipulation; }
+    canvas { background:var(--bg); border:1px solid var(--stroke); border-radius:18px; touch-action: manipulation; }
 
-    /* Top bar */
     #topbar{
       position: fixed; left: 12px; right:12px; top: 12px;
       display:flex; align-items:center; justify-content:space-between;
@@ -32,9 +30,7 @@
     }
     #brand{ display:flex; align-items:center; gap:10px; min-width: 0; }
     #brand img{ height:28px; width:auto; display:block; }
-    #brand .title{
-      font-weight: 800; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    }
+    #brand .title{ font-weight: 850; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #brand .subtitle{ font-size:12px; color:var(--muted); margin-top:1px; }
 
     .btn{
@@ -45,6 +41,9 @@
       border-radius: 12px;
       cursor:pointer;
       user-select:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
     }
     .btn:hover{ background: rgba(255,255,255,.10); }
     .btn.primary{
@@ -53,10 +52,9 @@
     }
     .btn.primary:hover{ background: rgba(225,6,0,.30); }
 
-    /* Drawer / menu */
     #drawer{
       position: fixed; right: 12px; top: 64px;
-      width: 360px;
+      width: 380px;
       max-width: calc(100vw - 24px);
       background: var(--panel);
       border:1px solid var(--stroke);
@@ -70,17 +68,23 @@
       pointer-events: none;
       transition: opacity .15s ease, transform .15s ease;
     }
-    #drawer.open{
-      opacity: 1;
-      transform: translateY(0);
-      pointer-events: auto;
-    }
+    #drawer.open{ opacity: 1; transform: translateY(0); pointer-events: auto; }
 
     .row{ margin: 10px 0; }
     .rowline{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .label{ color: var(--muted); font-size:12px; }
-    .val{ font-weight: 800; }
-    input[type="range"]{ width: 220px; }
+    .val{ font-weight: 850; }
+    input[type="range"]{ width: 230px; }
+    select{
+      width: 230px;
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border:1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 8px 10px;
+      outline: none;
+    }
+
     #mini{
       position: fixed; left: 12px; bottom: 12px;
       background: rgba(10,10,10,.55);
@@ -99,50 +103,89 @@
     .hint{ font-size:12px; color: var(--muted); margin-top:6px; line-height: 1.25; }
     kbd { background: rgba(255,255,255,.06); border:1px solid var(--stroke); padding:2px 6px; border-radius:8px; color:#fff; }
 
-    /* Small screens */
-    @media (max-width: 520px){
-      #drawer{ width: calc(100vw - 24px); }
-      input[type="range"]{ width: 200px; }
+    /* Start overlay (Stop & Go) */
+    #overlay{
+      position: fixed; inset: 0;
+      display:flex; align-items:center; justify-content:center;
+      background: rgba(0,0,0,.65);
+      z-index: 20;
+      padding: 18px;
+    }
+    #card{
+      width: 520px; max-width: calc(100vw - 36px);
+      background: rgba(10,10,10,.86);
+      border:1px solid var(--stroke);
+      border-radius: 18px;
+      padding: 16px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    #card h2{ margin: 0 0 8px 0; font-size: 18px; }
+    #card p{ margin: 6px 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
+    #err{
+      display:none;
+      margin-top:10px;
+      padding:10px 12px;
+      border-radius: 14px;
+      border:1px solid rgba(225,6,0,.55);
+      background: rgba(225,6,0,.10);
+      color: #fff;
+      font-size: 12px;
+      white-space: pre-wrap;
     }
   </style>
 </head>
 
 <body>
   <div id="wrap">
-  <canvas id="c" width="1200" height="720"></canvas>  </div>
+    <!-- Zone de jeu (on l’agrandit déjà un peu) -->
+    <canvas id="c" width="1200" height="720"></canvas>
+  </div>
 
-  <!-- Topbar -->
   <div id="topbar">
     <div id="brand">
       <img id="logo" alt="Logo" />
       <div style="min-width:0">
-        <div class="title">GK Visual Tracking</div>
-        <div class="subtitle">Mode Xamax — STOP → ESPACE révèle</div>
+        <div class="title">GK Visual Lab</div>
+        <div class="subtitle" id="subtitle">Stop & Go • Mode au choix</div>
       </div>
     </div>
     <div style="display:flex; gap:8px; align-items:center;">
-      <button class="btn primary" id="startBtn">Nouvel essai</button>
+      <button class="btn primary" id="startBtn">Démarrer</button>
       <button class="btn" id="toggleBtn">☰</button>
     </div>
   </div>
 
-  <!-- Drawer -->
   <div id="drawer">
     <div class="rowline">
       <div>
-        <div style="font-weight:800">Réglages</div>
-        <div class="label">Ajuste avant l’essai (ou entre essais)</div>
+        <div style="font-weight:850">Menu</div>
+        <div class="label">Choisis le mini-jeu + réglages</div>
       </div>
-      <button class="btn" id="revealBtn">Révéler</button>
+      <button class="btn" id="stopBtn">Stop</button>
     </div>
 
+    <div class="row">
+      <div class="rowline">
+        <div>
+          <div class="label">Mini-jeu</div>
+          <div class="val"><span id="modeVal"></span></div>
+        </div>
+        <select id="mode">
+          <option value="tracker">Tracker (MOT)</option>
+          <option value="grid">Visual Search (grille)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Réglages communs -->
     <div class="row">
       <div class="rowline">
         <div>
           <div class="label">Vitesse</div>
           <div class="val"><span id="speedVal"></span></div>
         </div>
-        <input id="speed" type="range" min="60" max="520" step="10" />
+        <input id="speed" type="range" min="40" max="600" step="10" />
       </div>
     </div>
 
@@ -152,32 +195,50 @@
           <div class="label">Durée mouvement (s)</div>
           <div class="val"><span id="moveVal"></span></div>
         </div>
-        <input id="move" type="range" min="2" max="20" step="1" />
+        <input id="move" type="range" min="2" max="25" step="1" />
       </div>
     </div>
 
     <div class="row">
       <div class="rowline">
         <div>
-          <div class="label">Cible visible (ms)</div>
+          <div class="label">Taille éléments</div>
+          <div class="val"><span id="sizeVal"></span> px</div>
+        </div>
+        <input id="size" type="range" min="10" max="34" step="1" />
+      </div>
+    </div>
+
+    <!-- Réglages tracker -->
+    <div class="row" id="trackerBlock">
+      <div class="rowline" style="margin-bottom:6px">
+        <div>
+          <div class="label">Tracker — variante</div>
+          <div class="val"><span id="stimVal"></span></div>
+        </div>
+        <select id="stimulus">
+          <option value="color">Cible en couleur</option>
+          <option value="number">Numéros (puis masqués)</option>
+        </select>
+      </div>
+
+      <div class="rowline">
+        <div>
+          <div class="label">Cue visible (ms)</div>
           <div class="val"><span id="cueVal"></span></div>
         </div>
         <input id="cue" type="range" min="300" max="2500" step="100" />
       </div>
-    </div>
 
-    <div class="row">
-      <div class="rowline">
+      <div class="rowline" style="margin-top:10px">
         <div>
-          <div class="label">Nb objets</div>
+          <div class="label">Nb billes</div>
           <div class="val"><span id="nVal"></span></div>
         </div>
-        <input id="nDots" type="range" min="4" max="22" step="1" />
+        <input id="nDots" type="range" min="4" max="24" step="1" />
       </div>
-    </div>
 
-    <div class="row">
-      <div class="rowline">
+      <div class="rowline" style="margin-top:10px">
         <div>
           <div class="label">Chaos</div>
           <div class="val"><span id="chaosVal"></span></div>
@@ -186,157 +247,245 @@
       </div>
     </div>
 
-    <div class="row">
+    <!-- Réglages grid -->
+    <div class="row" id="gridBlock" style="display:none">
       <div class="rowline">
         <div>
-          <div class="label">Taille des boules</div>
-          <div class="val"><span id="radiusVal"></span> px</div>
+          <div class="label">Taille grille</div>
+          <div class="val"><span id="gridVal"></span></div>
         </div>
-        <input id="radius" type="range" min="10" max="28" step="1" />
+        <select id="gridSize">
+          <option value="4">4×4</option>
+          <option value="5" selected>5×5</option>
+          <option value="6">6×6</option>
+        </select>
+      </div>
+
+      <div class="rowline" style="margin-top:10px">
+        <div>
+          <div class="label">Type stimulus</div>
+          <div class="val"><span id="gridStimVal"></span></div>
+        </div>
+        <select id="gridStim">
+          <option value="numbers" selected>Nombres</option>
+          <option value="letters">Lettres</option>
+          <option value="mix">Mix</option>
+        </select>
+      </div>
+
+      <div class="hint" style="margin-top:10px">
+        En “Visual Search”, la cible est indiquée avant le départ, puis la grille bouge.
+        À STOP, tu révèles / tu valides avec le coach.
       </div>
     </div>
 
     <div class="hint">
-      Raccourcis: <kbd>Espace</kbd> nouvel essai • (en STOP) <kbd>Espace</kbd> révèle • <kbd>R</kbd> révèle
+      Raccourcis: <kbd>ESPACE</kbd> Start/Stop • <kbd>M</kbd> menu • <kbd>N</kbd> nouvel essai
     </div>
   </div>
 
-  <!-- Mini HUD -->
   <div id="mini">
     <div class="kpi">
-      <div>Phase: <b id="phase">—</b></div>
+      <div>Mode: <b id="modeMini">—</b></div>
+      <div>Phase: <b id="phase">READY</b></div>
       <div>Essais: <b id="trials">0</b></div>
       <div>Temps: <b id="time">0.00</b>s</div>
     </div>
     <div id="bar"><div id="fill"></div></div>
   </div>
 
+  <!-- Stop & Go overlay -->
+  <div id="overlay">
+    <div id="card">
+      <h2>GK Visual Lab — prêt</h2>
+      <p>Rien ne démarre tout seul. Clique <b>Démarrer</b> ou appuie sur <b>ESPACE</b>.</p>
+      <p>Tu peux changer de mini-jeu dans le menu ☰ : <b>Tracker</b> (suivi) ou <b>Visual Search</b> (grille).</p>
+      <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+        <button class="btn primary" id="overlayStart">Démarrer</button>
+        <button class="btn" id="overlayMenu">Ouvrir menu</button>
+      </div>
+      <div id="err"></div>
+    </div>
+  </div>
+
 <script>
 (() => {
-  // ===== LOGO PATH =====
-  // Mets ici le chemin exact du logo dans ton repo:
-  // ex: "assets/xamax.png" ou "xamax.png"
-  const LOGO_PATH = "xamaxlogo.png";
+  // ===== Logo (optionnel) =====
+  const LOGO_PATH = "xamaxlogo.png"; // laisse comme ça si ton fichier est à la racine
+  const logoEl = document.getElementById('logo');
+  logoEl.onerror = () => { logoEl.style.display = "none"; }; // ne casse jamais l’app
+  if (LOGO_PATH) logoEl.src = LOGO_PATH; else logoEl.style.display = "none";
 
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
 
-  const logoEl = document.getElementById('logo');
-  logoEl.src = LOGO_PATH;
+  // UI
+  const subtitleEl = document.getElementById('subtitle');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const drawer = document.getElementById('drawer');
 
-  // ====== PARAMÈTRES ======
-  const CONFIG = {
-    nDots: 10,
-    radius: 18,        // boules plus grandes par défaut
-    chaos: 0.35,
-    speed: 260,
-    showTargetMs: 900,
-    moveMs: 7000,
-    bounce: true,
-  };
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
 
-  // ====== UI ======
+  const overlay = document.getElementById('overlay');
+  const overlayStart = document.getElementById('overlayStart');
+  const overlayMenu = document.getElementById('overlayMenu');
+  const errBox = document.getElementById('err');
+
+  const modeSel = document.getElementById('mode');
+  const modeVal = document.getElementById('modeVal');
+  const modeMini = document.getElementById('modeMini');
+
   const phaseEl = document.getElementById('phase');
   const trialsEl = document.getElementById('trials');
   const timeEl = document.getElementById('time');
   const fillEl = document.getElementById('fill');
 
-  const startBtn = document.getElementById('startBtn');
-  const revealBtn = document.getElementById('revealBtn');
-  const toggleBtn = document.getElementById('toggleBtn');
-  const drawer = document.getElementById('drawer');
-
   const speedSlider = document.getElementById('speed');
   const moveSlider  = document.getElementById('move');
-  const cueSlider   = document.getElementById('cue');
-  const nSlider     = document.getElementById('nDots');
-  const chaosSlider = document.getElementById('chaos');
-  const radiusSlider= document.getElementById('radius');
-
+  const sizeSlider  = document.getElementById('size');
   const speedValEl = document.getElementById('speedVal');
   const moveValEl  = document.getElementById('moveVal');
-  const cueValEl   = document.getElementById('cueVal');
-  const nValEl     = document.getElementById('nVal');
-  const chaosValEl = document.getElementById('chaosVal');
-  const radiusValEl= document.getElementById('radiusVal');
+  const sizeValEl  = document.getElementById('sizeVal');
 
-  function syncControlsFromConfig() {
-    speedSlider.value = CONFIG.speed;
-    moveSlider.value  = Math.round(CONFIG.moveMs / 1000);
-    cueSlider.value   = CONFIG.showTargetMs;
-    nSlider.value     = CONFIG.nDots;
-    chaosSlider.value = CONFIG.chaos;
-    radiusSlider.value= CONFIG.radius;
+  // Tracker controls
+  const trackerBlock = document.getElementById('trackerBlock');
+  const stimulusSel = document.getElementById('stimulus');
+  const stimValEl = document.getElementById('stimVal');
+  const cueSlider = document.getElementById('cue');
+  const cueValEl  = document.getElementById('cueVal');
+  const nSlider   = document.getElementById('nDots');
+  const nValEl    = document.getElementById('nVal');
+  const chaosSlider = document.getElementById('chaos');
+  const chaosValEl  = document.getElementById('chaosVal');
 
-    speedValEl.textContent = CONFIG.speed;
-    moveValEl.textContent  = (CONFIG.moveMs / 1000).toFixed(0);
-    cueValEl.textContent   = CONFIG.showTargetMs;
-    nValEl.textContent     = CONFIG.nDots;
-    chaosValEl.textContent = CONFIG.chaos.toFixed(2);
-    radiusValEl.textContent= CONFIG.radius;
-  }
+  // Grid controls
+  const gridBlock = document.getElementById('gridBlock');
+  const gridSizeSel = document.getElementById('gridSize');
+  const gridValEl = document.getElementById('gridVal');
+  const gridStimSel = document.getElementById('gridStim');
+  const gridStimValEl = document.getElementById('gridStimVal');
 
-  function applyControlsToConfig() {
-    CONFIG.speed = parseInt(speedSlider.value, 10);
-    CONFIG.moveMs = parseInt(moveSlider.value, 10) * 1000;
-    CONFIG.showTargetMs = parseInt(cueSlider.value, 10);
-    CONFIG.nDots = parseInt(nSlider.value, 10);
-    CONFIG.chaos = parseFloat(chaosSlider.value);
-    CONFIG.radius = parseInt(radiusSlider.value, 10);
+  // ===== Config =====
+  const CONFIG = {
+    mode: 'tracker',     // tracker | grid
+    speed: 260,
+    moveMs: 7000,
+    size: 18,
 
-    speedValEl.textContent = CONFIG.speed;
-    moveValEl.textContent  = (CONFIG.moveMs / 1000).toFixed(0);
-    cueValEl.textContent   = CONFIG.showTargetMs;
-    nValEl.textContent     = CONFIG.nDots;
-    chaosValEl.textContent = CONFIG.chaos.toFixed(2);
-    radiusValEl.textContent= CONFIG.radius;
-  }
+    // tracker
+    stimulus: 'color',   // color | number
+    showTargetMs: 900,
+    nDots: 10,
+    chaos: 0.35,
 
-  [speedSlider, moveSlider, cueSlider, nSlider, chaosSlider, radiusSlider]
-    .forEach(el => el.addEventListener('input', applyControlsToConfig));
+    // grid
+    gridN: 5,
+    gridStim: 'numbers', // numbers | letters | mix
+  };
 
-  // ====== état ======
-  let dots = [];
-  let targetId = 0;
-  let phase = 'idle'; // idle | cue | waiting | stopped | revealed
+  // ===== State =====
+  let running = false;
+  let phase = 'READY';       // READY | CUE | TRACK | STOP | REVEAL
+  let trials = 0;
+
   let t0 = 0;
   let last = 0;
-  let trials = 0;
-  let reveal = false;
 
+  // tracker state
+  let dots = [];
+  let targetId = 0;
+
+  // grid state
+  let grid = []; // cells with x,y,vx,vy,text,isTarget
+  let gridTargetText = '';
+
+  // Colors
   const BG = '#0b0b0b';
   const DOT = '#e6e6e6';
-  const TARGET_CUE = '#ff3b30';
+  const TARGET_CUE = '#e10600'; // rouge xamax
   const REVEAL_OK = '#34c759';
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-  function resizeToFit() {
-  const topOffset = 90;   // place pour la top bar
-  const bottomOffset = 80; // place pour le mini HUD
-  const sideOffset = 24;
-
-  const maxW = window.innerWidth - sideOffset;
-  const maxH = window.innerHeight - topOffset - bottomOffset;
-
-  const aspect = 1200 / 720; // ratio du canvas
-
-  let w = maxW;
-  let h = w / aspect;
-
-  if (h > maxH) {
-    h = maxH;
-    w = h * aspect;
+  function setError(msg){
+    errBox.style.display = "block";
+    errBox.textContent = msg;
   }
 
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-}
+  // ========= UI sync =========
+  function syncUI(){
+    modeSel.value = CONFIG.mode;
+    modeVal.textContent = CONFIG.mode === 'tracker' ? 'Tracker' : 'Visual Search';
+    modeMini.textContent = modeVal.textContent;
 
-    let w = Math.min(900, maxW);
+    speedSlider.value = CONFIG.speed;
+    moveSlider.value  = Math.round(CONFIG.moveMs/1000);
+    sizeSlider.value  = CONFIG.size;
+
+    speedValEl.textContent = CONFIG.speed;
+    moveValEl.textContent  = (CONFIG.moveMs/1000).toFixed(0);
+    sizeValEl.textContent  = CONFIG.size;
+
+    stimulusSel.value = CONFIG.stimulus;
+    stimValEl.textContent = CONFIG.stimulus === 'color' ? 'Couleur' : 'Numéros';
+    cueSlider.value = CONFIG.showTargetMs;
+    cueValEl.textContent = CONFIG.showTargetMs;
+    nSlider.value = CONFIG.nDots;
+    nValEl.textContent = CONFIG.nDots;
+    chaosSlider.value = CONFIG.chaos;
+    chaosValEl.textContent = CONFIG.chaos.toFixed(2);
+
+    gridSizeSel.value = String(CONFIG.gridN);
+    gridValEl.textContent = `${CONFIG.gridN}×${CONFIG.gridN}`;
+    gridStimSel.value = CONFIG.gridStim;
+    gridStimValEl.textContent = (CONFIG.gridStim === 'numbers') ? 'Nombres' : (CONFIG.gridStim === 'letters') ? 'Lettres' : 'Mix';
+
+    trackerBlock.style.display = (CONFIG.mode === 'tracker') ? 'block' : 'none';
+    gridBlock.style.display = (CONFIG.mode === 'grid') ? 'block' : 'none';
+
+    subtitleEl.textContent = running
+      ? (phase === 'STOP' ? 'STOP → ESPACE révèle' : 'En cours')
+      : 'Stop & Go • Mode au choix';
+  }
+
+  function applyFromControls(){
+    CONFIG.mode = modeSel.value;
+    CONFIG.speed = parseInt(speedSlider.value, 10);
+    CONFIG.moveMs = parseInt(moveSlider.value, 10) * 1000;
+    CONFIG.size = parseInt(sizeSlider.value, 10);
+
+    CONFIG.stimulus = stimulusSel.value;
+    CONFIG.showTargetMs = parseInt(cueSlider.value, 10);
+    CONFIG.nDots = parseInt(nSlider.value, 10);
+    CONFIG.chaos = parseFloat(chaosSlider.value);
+
+    CONFIG.gridN = parseInt(gridSizeSel.value, 10);
+    CONFIG.gridStim = gridStimSel.value;
+
+    syncUI();
+  }
+
+  [modeSel, speedSlider, moveSlider, sizeSlider, stimulusSel, cueSlider, nSlider, chaosSlider, gridSizeSel, gridStimSel]
+    .forEach(el => el.addEventListener('input', applyFromControls));
+
+  toggleBtn.addEventListener('click', () => drawer.classList.toggle('open'));
+
+  // ========= Resize =========
+  function resizeToFit(){
+    // On maximise l’espace dispo en tenant compte des barres
+    const topOffset = 84;
+    const bottomOffset = 88;
+    const sideOffset = 24;
+
+    const maxW = window.innerWidth - sideOffset;
+    const maxH = window.innerHeight - topOffset - bottomOffset;
+
+    const aspect = canvas.width / canvas.height; // 1200/720 par défaut
+    let w = maxW;
     let h = w / aspect;
-    if (h > maxH) { h = Math.min(520, maxH); w = h * aspect; }
+    if (h > maxH) { h = maxH; w = h * aspect; }
 
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
@@ -344,142 +493,406 @@
   window.addEventListener('resize', resizeToFit);
   resizeToFit();
 
-  function initTrial() {
-    applyControlsToConfig();
-    trials++;
-    trialsEl.textContent = trials;
-    reveal = false;
-
-    const W = canvas.width, H = canvas.height;
+  // ========= Build trials =========
+  function buildTracker(){
     dots = [];
-    for (let i = 0; i < CONFIG.nDots; i++) {
-      const angle = rand(0, Math.PI * 2);
-      const sp = rand(CONFIG.speed * 0.75, CONFIG.speed * 1.25);
+    const W = canvas.width, H = canvas.height;
+    for (let i=0;i<CONFIG.nDots;i++){
+      const angle = rand(0, Math.PI*2);
+      const sp = rand(CONFIG.speed*0.75, CONFIG.speed*1.25);
       dots.push({
-        id: i,
-        x: rand(CONFIG.radius, W - CONFIG.radius),
-        y: rand(CONFIG.radius, H - CONFIG.radius),
-        vx: Math.cos(angle) * sp,
-        vy: Math.sin(angle) * sp,
+        id:i,
+        x: rand(CONFIG.size, W-CONFIG.size),
+        y: rand(CONFIG.size, H-CONFIG.size),
+        vx: Math.cos(angle)*sp,
+        vy: Math.sin(angle)*sp,
+        label: String(i+1) // numéros 1..n
       });
     }
     targetId = Math.floor(rand(0, CONFIG.nDots));
-
-    phase = 'cue';
-    phaseEl.textContent = 'CIBLE';
-    t0 = performance.now();
-    last = t0;
-    requestAnimationFrame(loop);
   }
 
-  function revealTarget() {
-    reveal = true;
-    phase = 'revealed';
-    phaseEl.textContent = 'RÉVÉLÉ';
+  function pickStimText(){
+    const n = CONFIG.gridN * CONFIG.gridN;
+    const texts = [];
+    if (CONFIG.gridStim === 'numbers' || CONFIG.gridStim === 'mix'){
+      for (let i=0;i<n;i++) texts.push(String(rand(10,99)|0));
+    }
+    if (CONFIG.gridStim === 'letters' || CONFIG.gridStim === 'mix'){
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I/O
+      while (texts.length < n){
+        texts.push(alphabet[(Math.random()*alphabet.length)|0]);
+      }
+    }
+    // shuffle
+    for (let i=texts.length-1;i>0;i--){
+      const j = (Math.random()*(i+1))|0;
+      [texts[i],texts[j]]=[texts[j],texts[i]];
+    }
+    return texts.slice(0,n);
   }
 
-  function step(dt) {
+  function buildGrid(){
+    grid = [];
+    const N = CONFIG.gridN;
     const W = canvas.width, H = canvas.height;
 
-    for (const d of dots) {
-      d.vx += rand(-1, 1) * CONFIG.chaos * 60;
-      d.vy += rand(-1, 1) * CONFIG.chaos * 60;
+    const cellPad = 12;
+    const usableW = W - cellPad*2;
+    const usableH = H - cellPad*2;
 
-      const sp = Math.hypot(d.vx, d.vy) || 1;
-      const desired = CONFIG.speed;
-      d.vx = (d.vx / sp) * (desired + rand(-20, 20));
-      d.vy = (d.vy / sp) * (desired + rand(-20, 20));
+    const cellW = usableW / N;
+    const cellH = usableH / N;
 
-      d.x += d.vx * dt;
-      d.y += d.vy * dt;
+    const texts = pickStimText();
+    const targetIndex = (Math.random()*texts.length)|0;
+    gridTargetText = texts[targetIndex];
 
-      if (CONFIG.bounce) {
-        if (d.x < CONFIG.radius) { d.x = CONFIG.radius; d.vx *= -1; }
-        if (d.x > W - CONFIG.radius) { d.x = W - CONFIG.radius; d.vx *= -1; }
-        if (d.y < CONFIG.radius) { d.y = CONFIG.radius; d.vy *= -1; }
-        if (d.y > H - CONFIG.radius) { d.y = H - CONFIG.radius; d.vy *= -1; }
+    // chaque cellule “bouge” légèrement (layout qui bouge)
+    let k = 0;
+    for (let r=0;r<N;r++){
+      for (let c=0;c<N;c++){
+        const x0 = cellPad + c*cellW + cellW/2;
+        const y0 = cellPad + r*cellH + cellH/2;
+        const angle = rand(0, Math.PI*2);
+        const sp = rand(CONFIG.speed*0.15, CONFIG.speed*0.35); // plus lent que le tracker
+        grid.push({
+          x:x0, y:y0,
+          vx: Math.cos(angle)*sp,
+          vy: Math.sin(angle)*sp,
+          text: texts[k],
+          isTarget: (k===targetIndex)
+        });
+        k++;
       }
     }
   }
 
-  function draw(now) {
+  function newTrial(){
+    applyFromControls();
+    trials++;
+    trialsEl.textContent = trials;
+    phase = 'READY';
+    running = false;
+    phaseEl.textContent = phase;
+    fillEl.style.width = '0%';
+    timeEl.textContent = '0.00';
+    overlay.style.display = 'flex';
+
+    // prépare le contenu
+    if (CONFIG.mode === 'tracker') buildTracker();
+    else buildGrid();
+
+    draw(performance.now());
+  }
+
+  // ========= Simulation =========
+  function startRun(){
+    overlay.style.display = 'none';
+    running = true;
+    t0 = performance.now();
+    last = t0;
+
+    phase = 'CUE';
+    phaseEl.textContent = phase;
+
+    requestAnimationFrame(loop);
+    syncUI();
+  }
+
+  function stopRun(){
+    running = false;
+    phase = 'STOP';
+    phaseEl.textContent = phase;
+    syncUI();
+  }
+
+  function reveal(){
+    phase = 'REVEAL';
+    phaseEl.textContent = phase;
+    syncUI();
+  }
+
+  function stepTracker(dt){
     const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
+    for (const d of dots){
+      d.vx += rand(-1,1)*CONFIG.chaos*60;
+      d.vy += rand(-1,1)*CONFIG.chaos*60;
 
+      const sp = Math.hypot(d.vx,d.vy) || 1;
+      const desired = CONFIG.speed;
+      d.vx = (d.vx/sp)*(desired + rand(-20,20));
+      d.vy = (d.vy/sp)*(desired + rand(-20,20));
+
+      d.x += d.vx*dt;
+      d.y += d.vy*dt;
+
+      // bounce
+      if (d.x < CONFIG.size) { d.x = CONFIG.size; d.vx *= -1; }
+      if (d.x > W-CONFIG.size) { d.x = W-CONFIG.size; d.vx *= -1; }
+      if (d.y < CONFIG.size) { d.y = CONFIG.size; d.vy *= -1; }
+      if (d.y > H-CONFIG.size) { d.y = H-CONFIG.size; d.vy *= -1; }
+    }
+  }
+
+  function stepGrid(dt){
+    const W = canvas.width, H = canvas.height;
+    const pad = 14;
+    for (const cell of grid){
+      cell.x += cell.vx*dt;
+      cell.y += cell.vy*dt;
+      // rebonds doux
+      if (cell.x < pad) { cell.x = pad; cell.vx *= -1; }
+      if (cell.x > W-pad) { cell.x = W-pad; cell.vx *= -1; }
+      if (cell.y < pad) { cell.y = pad; cell.vy *= -1; }
+      if (cell.y > H-pad) { cell.y = H-pad; cell.vy *= -1; }
+    }
+  }
+
+  function draw(now){
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
     ctx.fillStyle = BG;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0,0,W,H);
 
-    const elapsed = (now - t0) / 1000;
-    timeEl.textContent = elapsed.toFixed(2);
+    // temps + barre (jusqu’au stop auto)
+    if (running){
+      const elapsed = (now - t0) / 1000;
+      timeEl.textContent = elapsed.toFixed(2);
+    }
 
-    const totalMsToStop = CONFIG.showTargetMs + CONFIG.moveMs;
-    const p = clamp((now - t0) / totalMsToStop, 0, 1);
-    fillEl.style.width = (p * 100).toFixed(1) + '%';
+    const totalMsToStop = (CONFIG.mode === 'tracker')
+      ? (CONFIG.showTargetMs + CONFIG.moveMs)
+      : (1200 + CONFIG.moveMs); // cue fixe pour la grille
 
-    for (const d of dots) {
+    if (running){
+      const p = clamp((now - t0) / totalMsToStop, 0, 1);
+      fillEl.style.width = (p*100).toFixed(1)+'%';
+    }
+
+    // instructions in-canvas
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.font = '22px system-ui, -apple-system, Segoe UI, Roboto';
+    if (!running && phase === 'READY'){
+      ctx.fillText('Prêt — clique Démarrer / ESPACE', 24, 44);
+    }
+    if (phase === 'STOP'){
+      ctx.fillText('STOP — ESPACE pour révéler', 24, 44);
+    }
+    if (CONFIG.mode === 'grid'){
+      ctx.font = '18px system-ui, -apple-system, Segoe UI, Roboto';
+      ctx.fillStyle = 'rgba(255,255,255,.75)';
+      ctx.fillText(`Cible: ${gridTargetText}`, 24, 74);
+    }
+
+    // render game
+    if (CONFIG.mode === 'tracker') drawTracker();
+    else drawGrid();
+  }
+
+  function drawTracker(){
+    const showCue = (phase === 'CUE');
+    const showNumbers = (CONFIG.stimulus === 'number') && showCue; // numéros visibles uniquement pendant cue
+
+    for (const d of dots){
       let color = DOT;
-      if (phase === 'cue' && d.id === targetId) color = TARGET_CUE;
-      if (reveal && d.id === targetId) color = REVEAL_OK;
+      if (showCue && d.id === targetId){
+        color = (CONFIG.stimulus === 'color') ? TARGET_CUE : DOT; // si number: pas de couleur spéciale
+      }
+      if (phase === 'REVEAL' && d.id === targetId){
+        color = REVEAL_OK;
+      }
 
+      // boule
       ctx.beginPath();
-      ctx.arc(d.x, d.y, CONFIG.radius, 0, Math.PI * 2);
+      ctx.arc(d.x, d.y, CONFIG.size, 0, Math.PI*2);
       ctx.fillStyle = color;
       ctx.fill();
-
       ctx.lineWidth = 2;
       ctx.strokeStyle = '#111';
       ctx.stroke();
+
+      // numéros (cue seulement si mode number)
+      if (showNumbers){
+        ctx.fillStyle = '#111';
+        ctx.font = `${Math.max(12, CONFIG.size)}px system-ui, -apple-system, Segoe UI, Roboto`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(d.label, d.x, d.y+1);
+      }
     }
 
-    ctx.fillStyle = 'rgba(255,255,255,.85)';
-    ctx.font = '18px system-ui, -apple-system, Segoe UI, Roboto';
-    if (phase === 'cue') ctx.fillText('Cible visible (rouge)', 18, 34);
-    if (phase === 'waiting') ctx.fillText('Tout identique — tracking', 18, 34);
-    if (phase === 'stopped') ctx.fillText('STOP — ESPACE pour révéler', 18, 34);
-    if (phase === 'revealed') ctx.fillText('Révélé', 18, 34);
+    // micro texte
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(255,255,255,.70)';
+    ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto';
+    if (phase === 'CUE'){
+      if (CONFIG.stimulus === 'color') ctx.fillText('Cible rouge (mémorise)', 24, canvas.height-24);
+      else ctx.fillText('Mémorise le numéro de la cible', 24, canvas.height-24);
+    } else if (phase === 'TRACK'){
+      ctx.fillText('Tout identique — tracking', 24, canvas.height-24);
+    }
   }
 
-  function loop(now) {
-    const dt = (now - last) / 1000;
-    last = now;
-    const ms = now - t0;
+  function drawGrid(){
+    // Dessine les items comme des “pastilles” texte
+    for (const cell of grid){
+      const isCue = (phase === 'CUE');
+      const showTarget = (phase === 'REVEAL' && cell.isTarget);
 
-    if (phase === 'cue' && ms >= CONFIG.showTargetMs) {
-      phase = 'waiting';
-      phaseEl.textContent = 'TRACK';
+      // bulle
+      ctx.beginPath();
+      ctx.roundRect(cell.x - (CONFIG.size*2.2), cell.y - (CONFIG.size*1.35), CONFIG.size*4.4, CONFIG.size*2.7, 14);
+      ctx.fillStyle = showTarget ? 'rgba(52,199,89,.85)' : 'rgba(255,255,255,.06)';
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = showTarget ? 'rgba(52,199,89,.95)' : 'rgba(255,255,255,.10)';
+      ctx.stroke();
+
+      // texte
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.max(14, CONFIG.size)}px system-ui, -apple-system, Segoe UI, Roboto`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(cell.text, cell.x, cell.y);
+
+      // cue visuel léger sur la cible (seulement pendant cue)
+      if (isCue && cell.isTarget){
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(225,6,0,.95)';
+        ctx.stroke();
+      }
     }
 
-    if (phase === 'cue' || phase === 'waiting') step(dt);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
 
-    if (phase === 'waiting' && ms >= (CONFIG.showTargetMs + CONFIG.moveMs)) {
-      phase = 'stopped';
-      phaseEl.textContent = 'STOP';
+  // ========= Main loop =========
+  function loop(now){
+    if (!running) { draw(now); return; }
+
+    const dt = (now - last)/1000;
+    last = now;
+
+    const ms = now - t0;
+
+    // Phase transitions selon mode
+    if (CONFIG.mode === 'tracker'){
+      // CUE -> TRACK
+      if (phase === 'CUE' && ms >= CONFIG.showTargetMs){
+        phase = 'TRACK';
+        phaseEl.textContent = phase;
+      }
+
+      // Sim step tant qu’on est en CUE ou TRACK
+      if (phase === 'CUE' || phase === 'TRACK'){
+        stepTracker(dt);
+      }
+
+      // Auto STOP
+      if (phase === 'TRACK' && ms >= (CONFIG.showTargetMs + CONFIG.moveMs)){
+        stopRun();
+      }
+    } else {
+      // Grid : cue fixe 1200ms (cible entourée en rouge), puis bouge
+      const gridCueMs = 1200;
+
+      if (phase === 'CUE' && ms >= gridCueMs){
+        phase = 'TRACK';
+        phaseEl.textContent = phase;
+      }
+
+      if (phase === 'CUE' || phase === 'TRACK'){
+        stepGrid(dt);
+      }
+
+      if (phase === 'TRACK' && ms >= (gridCueMs + CONFIG.moveMs)){
+        stopRun();
+      }
     }
 
     draw(now);
-    if (phase !== 'idle') requestAnimationFrame(loop);
+    if (running) requestAnimationFrame(loop);
   }
 
-  // UI interactions
-  toggleBtn.addEventListener('click', () => drawer.classList.toggle('open'));
-  startBtn.addEventListener('click', initTrial);
-  revealBtn.addEventListener('click', () => { if (phase === 'stopped' && !reveal) revealTarget(); });
-
-  document.addEventListener('keydown', (e) => {
-    const k = e.key.toLowerCase();
-    if (e.code === 'Space') {
-      e.preventDefault();
-      if (phase === 'stopped' && !reveal) revealTarget();
-      else initTrial();
+  // ========= Controls =========
+  function toggleRun(){
+    if (!running && (phase === 'READY' || phase === 'STOP' || phase === 'REVEAL')){
+      // start new run from READY
+      if (phase !== 'READY') { newTrial(); }
+      startRun();
+      return;
     }
-    if (k === 'r') { if (phase === 'stopped' && !reveal) revealTarget(); }
-    if (k === 'm') drawer.classList.toggle('open'); // petit bonus
+    if (running){
+      // immediate stop
+      stopRun();
+      return;
+    }
+    if (!running && phase === 'STOP'){
+      reveal();
+      return;
+    }
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (phase === 'READY'){ startRun(); }
+    else { newTrial(); startRun(); }
+  });
+  overlayStart.addEventListener('click', () => startRun());
+  overlayMenu.addEventListener('click', () => drawer.classList.add('open'));
+
+  stopBtn.addEventListener('click', () => {
+    if (running) stopRun();
+    else if (phase === 'STOP') reveal();
   });
 
-  syncControlsFromConfig();
-  applyControlsToConfig();
-  initTrial();
-})();
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (e.code === 'Space'){
+      e.preventDefault();
+      if (running){ stopRun(); }
+      else if (phase === 'STOP'){ reveal(); }
+      else if (phase === 'READY'){ startRun(); }
+      else { newTrial(); startRun(); }
+    }
+    if (k === 'm') drawer.classList.toggle('open');
+    if (k === 'n') { newTrial(); }
+  });
+
+  // ===== Init =====
+  // In case of older Safari missing roundRect
+  if (!ctx.roundRect){
+    CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+      r = Math.min(r, w/2, h/2);
+      this.beginPath();
+      this.moveTo(x+r, y);
+      this.arcTo(x+w, y, x+w, y+h, r);
+      this.arcTo(x+w, y+h, x, y+h, r);
+      this.arcTo(x, y+h, x, y, r);
+      this.arcTo(x, y, x+w, y, r);
+      this.closePath();
+      return this;
+    };
+  }
+
+  modeSel.addEventListener('change', () => {
+    applyFromControls();
+    newTrial();
+  });
+
+  syncUI();
+  applyFromControls();
+  newTrial();
+
+  // Global error catch (pour éviter “plus rien” sans feedback)
+  window.addEventListener('error', (ev) => {
+    setError(`Erreur JS détectée:\n${ev.message}\n${ev.filename}:${ev.lineno}`);
+  });
+
+})().catch?.((e)=>{ /* ignore */ });
 </script>
 </body>
 </html>
