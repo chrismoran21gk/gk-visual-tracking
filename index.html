@@ -15,7 +15,7 @@
     }
     html, body { margin:0; height:100%; background:#070707; font-family: system-ui, -apple-system, Segoe UI, Roboto; color:var(--text); }
     #wrap { display:flex; height:100%; align-items:center; justify-content:center; padding:12px; }
-    canvas { background:var(--bg); border:1px solid var(--stroke); border-radius:18px; touch-action: manipulation; }
+    canvas { background:var(--bg); border:1px solid var(--stroke); border-radius:18px; touch-action: none; }
 
     #topbar{
       position: fixed; left: 12px; right:12px; top: 12px;
@@ -54,7 +54,7 @@
 
     #drawer{
       position: fixed; right: 12px; top: 64px;
-      width: 410px;
+      width: 420px;
       max-width: calc(100vw - 24px);
       background: var(--panel);
       border:1px solid var(--stroke);
@@ -104,7 +104,6 @@
     .hint{ font-size:12px; color: var(--muted); margin-top:6px; line-height: 1.25; }
     kbd { background: rgba(255,255,255,.06); border:1px solid var(--stroke); padding:2px 6px; border-radius:8px; color:#fff; }
 
-    /* Stop & Go overlay */
     #overlay{
       position: fixed; inset: 0;
       display:flex; align-items:center; justify-content:center;
@@ -113,7 +112,7 @@
       padding: 18px;
     }
     #card{
-      width: 580px; max-width: calc(100vw - 36px);
+      width: 600px; max-width: calc(100vw - 36px);
       background: rgba(10,10,10,.86);
       border:1px solid var(--stroke);
       border-radius: 18px;
@@ -161,11 +160,12 @@
       <img id="logo" alt="Logo" />
       <div style="min-width:0">
         <div class="title">GK Visual Lab</div>
-        <div class="subtitle" id="subtitle">Stop & Go • Mode au choix</div>
+        <div class="subtitle" id="subtitle">Tap écran / clic = Start • Stop • Reveal</div>
       </div>
     </div>
     <div style="display:flex; gap:8px; align-items:center;">
       <button class="btn primary" id="startBtn">Démarrer</button>
+      <button class="btn primary" id="revealBtn" style="display:none;">Reveal</button>
       <button class="btn" id="toggleBtn">☰</button>
     </div>
   </div>
@@ -192,7 +192,6 @@
       </div>
     </div>
 
-    <!-- Réglages communs -->
     <div class="row">
       <div class="rowline">
         <div>
@@ -223,7 +222,6 @@
       </div>
     </div>
 
-    <!-- Fixation + Gamification -->
     <div class="row">
       <div class="rowline" style="margin-bottom:6px">
         <div>
@@ -238,7 +236,7 @@
 
       <div class="rowline">
         <div>
-          <div class="label">Gamification (temps)</div>
+          <div class="label">Gamification (RT STOP→Reveal)</div>
           <div class="val"><span id="gameVal"></span></div>
         </div>
         <select id="gamify">
@@ -248,7 +246,6 @@
       </div>
     </div>
 
-    <!-- Blink (occlusion) -->
     <div class="row">
       <div class="rowline" style="margin-bottom:6px">
         <div>
@@ -278,7 +275,6 @@
       </div>
     </div>
 
-    <!-- Réglages tracker -->
     <div class="row" id="trackerBlock">
       <div class="rowline" style="margin-bottom:6px">
         <div>
@@ -324,7 +320,6 @@
       </div>
     </div>
 
-    <!-- Réglages grid -->
     <div class="row" id="gridBlock" style="display:none">
       <div class="rowline">
         <div>
@@ -339,12 +334,12 @@
       </div>
 
       <div class="hint" style="margin-top:10px">
-        Mode “chaos pur” : lettres + chiffres de couleurs aléatoires qui bougent. Pas de cible affichée.
+        Mode chaos : lettres + chiffres colorés qui bougent. (Pas de cible affichée.)
       </div>
     </div>
 
     <div class="hint">
-      Raccourcis: <kbd>ESPACE</kbd> Start/Stop/Reveal • <kbd>M</kbd> menu • <kbd>N</kbd> nouvel essai
+      Tap écran = action • <kbd>ESPACE</kbd> aussi • <kbd>M</kbd> menu • <kbd>N</kbd> nouvel essai
     </div>
   </div>
 
@@ -370,8 +365,8 @@
   <div id="overlay">
     <div id="card">
       <h2>GK Visual Lab — prêt</h2>
-      <p>Rien ne démarre tout seul. Clique <b>Démarrer</b> ou appuie sur <b>ESPACE</b>.</p>
-      <p>Menu ☰ : <b>Tracker</b> (suivi) ou <b>Visual Search</b> (chaos).</p>
+      <p>Sur iPad : <b>touche l’écran</b> pour Start/Stop/Reveal.</p>
+      <p>Tu peux aussi utiliser <b>Démarrer</b> et le bouton <b>Reveal</b> (qui apparaît en STOP).</p>
       <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
         <button class="btn primary" id="overlayStart">Démarrer</button>
         <button class="btn" id="overlayMenu">Ouvrir menu</button>
@@ -382,8 +377,7 @@
 
 <script>
 (() => {
-  // ===== Logo (optionnel) =====
-  const LOGO_PATH = "xamaxlogo.png"; // mets "" si tu veux le cacher
+  const LOGO_PATH = "xamaxlogo.png"; // optionnel
   const logoEl = document.getElementById('logo');
   logoEl.onerror = () => { logoEl.style.display = "none"; };
   if (LOGO_PATH) logoEl.src = LOGO_PATH; else logoEl.style.display = "none";
@@ -391,12 +385,12 @@
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
 
-  // UI base
   const subtitleEl = document.getElementById('subtitle');
   const toggleBtn = document.getElementById('toggleBtn');
   const drawer = document.getElementById('drawer');
 
   const startBtn = document.getElementById('startBtn');
+  const revealBtn = document.getElementById('revealBtn');
   const stopBtn = document.getElementById('stopBtn');
 
   const overlay = document.getElementById('overlay');
@@ -420,13 +414,11 @@
   const moveValEl  = document.getElementById('moveVal');
   const sizeValEl  = document.getElementById('sizeVal');
 
-  // Fixation + gamify
   const fixationSel = document.getElementById('fixation');
   const fixValEl = document.getElementById('fixVal');
   const gamifySel = document.getElementById('gamify');
   const gameValEl = document.getElementById('gameVal');
 
-  // Blink
   const blinkModeSel = document.getElementById('blinkMode');
   const blinkValEl = document.getElementById('blinkVal');
   const blinkCountSlider = document.getElementById('blinkCount');
@@ -434,7 +426,6 @@
   const blinkDurSlider = document.getElementById('blinkDur');
   const blinkDurValEl = document.getElementById('blinkDurVal');
 
-  // Tracker controls
   const trackerBlock = document.getElementById('trackerBlock');
   const stimulusSel = document.getElementById('stimulus');
   const stimValEl = document.getElementById('stimVal');
@@ -447,73 +438,60 @@
   const chaosSlider = document.getElementById('chaos');
   const chaosValEl  = document.getElementById('chaosVal');
 
-  // Grid controls
   const gridBlock = document.getElementById('gridBlock');
   const gridSizeSel = document.getElementById('gridSize');
   const gridValEl = document.getElementById('gridVal');
 
-  // Score UI
   const scorePill = document.getElementById('scorePill');
   const rtLastEl = document.getElementById('rtLast');
   const rtBestEl = document.getElementById('rtBest');
   const rtAvgEl  = document.getElementById('rtAvg');
 
-  // ===== Config =====
   const CONFIG = {
-    mode: 'tracker',     // tracker | grid
+    mode: 'tracker',
     speed: 260,
     moveMs: 7000,
     size: 18,
 
-    fixation: 'off',     // off | on
-    gamify: 'off',       // off | on
+    fixation: 'off',
+    gamify: 'off',
 
-    // blink
-    blinkMode: 'off',    // off | on
+    blinkMode: 'off',
     blinkCount: 2,
     blinkDurMs: 140,
 
-    // tracker
-    stimulus: 'color',   // color | number
+    stimulus: 'color',
     showTargetMs: 900,
     nDots: 10,
     nTargets: 1,
     chaos: 0.35,
 
-    // grid
     gridN: 5,
   };
 
-  // ===== State =====
   let running = false;
-  let phase = 'READY';       // READY | CUE | TRACK | STOP | REVEAL
+  let phase = 'READY'; // READY | CUE | TRACK | STOP | REVEAL
   let trials = 0;
-
   let t0 = 0;
   let last = 0;
 
-  // tracker state
   let dots = [];
   let targetIds = [];
+  let grid = [];
 
-  // grid state
-  let grid = []; // {x,y,vx,vy,text,color}
-
-  // blink state
-  let blinkTimes = [];  // in ms since t0
+  let blinkTimes = [];
   let blinkActive = false;
 
-  // gamify state
-  let stopAt = null;     // timestamp (performance.now()) when STOP happens
+  // gamify
+  let stopAt = null;
   let rtLast = null;
   let rtBest = null;
   let rtSum = 0;
   let rtCount = 0;
 
-  // Colors
   const BG = '#0b0b0b';
   const DOT = '#e6e6e6';
-  const TARGET_CUE = '#e10600'; // Xamax red
+  const TARGET_CUE = '#e10600';
   const REVEAL_OK = '#34c759';
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
@@ -521,9 +499,7 @@
 
   function randomBrightColor(){
     const h = (Math.random()*360)|0;
-    const s = 85;
-    const l = 60;
-    return `hsl(${h} ${s}% ${l}%)`;
+    return `hsl(${h} 85% 60%)`;
   }
 
   function setError(msg){
@@ -548,7 +524,10 @@
     rtAvgEl.textContent = fmtMs(avg);
   }
 
-  // ========= UI sync =========
+  function updateActionButtons(){
+    revealBtn.style.display = (!running && phase === 'STOP') ? 'inline-flex' : 'none';
+  }
+
   function syncUI(){
     modeSel.value = CONFIG.mode;
     modeVal.textContent = CONFIG.mode === 'tracker' ? 'Tracker' : 'Visual Search';
@@ -557,7 +536,6 @@
     speedSlider.value = CONFIG.speed;
     moveSlider.value  = Math.round(CONFIG.moveMs/1000);
     sizeSlider.value  = CONFIG.size;
-
     speedValEl.textContent = CONFIG.speed;
     moveValEl.textContent  = (CONFIG.moveMs/1000).toFixed(0);
     sizeValEl.textContent  = CONFIG.size;
@@ -592,11 +570,10 @@
     trackerBlock.style.display = (CONFIG.mode === 'tracker') ? 'block' : 'none';
     gridBlock.style.display = (CONFIG.mode === 'grid') ? 'block' : 'none';
 
-    subtitleEl.textContent = running
-      ? (phase === 'STOP' ? 'STOP → ESPACE révèle' : 'En cours')
-      : 'Stop & Go • Mode au choix';
+    subtitleEl.textContent = running ? 'En cours (tap = Stop)' : 'Tap écran / clic = Start • Stop • Reveal';
 
     updateScoreUI();
+    updateActionButtons();
   }
 
   function applyFromControls(){
@@ -633,16 +610,15 @@
 
   toggleBtn.addEventListener('click', () => drawer.classList.toggle('open'));
 
-  // ========= Resize =========
   function resizeToFit(){
     const topOffset = 84;
-    const bottomOffset = 110;
+    const bottomOffset = 120;
     const sideOffset = 24;
 
     const maxW = window.innerWidth - sideOffset;
     const maxH = window.innerHeight - topOffset - bottomOffset;
 
-    const aspect = canvas.width / canvas.height; // 1200/720
+    const aspect = canvas.width / canvas.height;
     let w = maxW;
     let h = w / aspect;
     if (h > maxH) { h = maxH; w = h * aspect; }
@@ -653,7 +629,6 @@
   window.addEventListener('resize', resizeToFit);
   resizeToFit();
 
-  // ========= Build trials =========
   function buildTracker(){
     dots = [];
     const W = canvas.width, H = canvas.height;
@@ -669,8 +644,6 @@
         label: String(i+1)
       });
     }
-
-    // Choose nTargets unique targets
     const pool = [...Array(CONFIG.nDots).keys()];
     for (let i = pool.length - 1; i > 0; i--) {
       const j = (Math.random() * (i + 1)) | 0;
@@ -683,8 +656,7 @@
     const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ";
     const out = [];
     for (let i=0;i<n;i++){
-      const chooseNumber = Math.random() < 0.5;
-      if (chooseNumber) out.push(String((Math.random()*10)|0)); // 0-9
+      if (Math.random() < 0.5) out.push(String((Math.random()*10)|0));
       else out.push(alphabet[(Math.random()*alphabet.length)|0]);
     }
     return out;
@@ -761,15 +733,14 @@
     else buildGrid();
 
     draw(performance.now());
+    syncUI();
   }
 
-  // ========= Simulation =========
   function startRun(){
     overlay.style.display = 'none';
     running = true;
     t0 = performance.now();
     last = t0;
-
     phase = 'CUE';
     phaseEl.textContent = phase;
 
@@ -784,10 +755,7 @@
     running = false;
     phase = 'STOP';
     phaseEl.textContent = phase;
-
-    // start RT timer at STOP
     stopAt = now ?? performance.now();
-
     syncUI();
   }
 
@@ -795,7 +763,6 @@
     phase = 'REVEAL';
     phaseEl.textContent = phase;
 
-    // record RT: time from STOP to reveal keypress/click
     if (CONFIG.gamify === 'on' && stopAt != null){
       const rt = (now ?? performance.now()) - stopAt;
       rtLast = rt;
@@ -805,6 +772,13 @@
     }
     updateScoreUI();
     syncUI();
+  }
+
+  function handleAction(now){
+    if (running) stopRun(now);
+    else if (phase === 'STOP') reveal(now);
+    else if (phase === 'READY') startRun();
+    else { newTrial(); startRun(); }
   }
 
   function stepTracker(dt){
@@ -894,23 +868,15 @@
       fillEl.style.width = (p*100).toFixed(1)+'%';
     }
 
-    // Info in-canvas
     ctx.fillStyle = 'rgba(255,255,255,.85)';
     ctx.font = '22px system-ui, -apple-system, Segoe UI, Roboto';
-    if (!running && phase === 'READY'){
-      ctx.fillText('Prêt — clique Démarrer / ESPACE', 24, 44);
-    }
-    if (phase === 'STOP'){
-      ctx.fillText('STOP — ESPACE pour révéler', 24, 44);
-    }
-    if (phase === 'REVEAL'){
-      ctx.fillText('RÉVÉLATION', 24, 44);
-    }
+    if (!running && phase === 'READY') ctx.fillText('Prêt — Tap écran / Démarrer', 24, 44);
+    if (phase === 'STOP') ctx.fillText('STOP — Tap écran / Reveal', 24, 44);
+    if (phase === 'REVEAL') ctx.fillText('RÉVÉLATION', 24, 44);
 
     if (CONFIG.mode === 'tracker') drawTracker();
     else drawGrid();
 
-    // Overlay constraints
     drawFixationCross();
     drawBlink();
   }
@@ -922,11 +888,9 @@
     for (const d of dots){
       let color = DOT;
 
-      // Cue marking (color stimulus only)
       if (showCue && targetIds.includes(d.id)){
         if (CONFIG.stimulus === 'color') color = TARGET_CUE;
       }
-      // Reveal targets (all targetIds)
       if (phase === 'REVEAL' && targetIds.includes(d.id)){
         color = REVEAL_OK;
       }
@@ -948,7 +912,6 @@
       }
     }
 
-    // bottom hint
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = 'rgba(255,255,255,.70)';
@@ -965,7 +928,8 @@
   function drawGrid(){
     for (const cell of grid){
       ctx.beginPath();
-      ctx.roundRect(cell.x - (CONFIG.size*2.0), cell.y - (CONFIG.size*1.25), CONFIG.size*4.0, CONFIG.size*2.5, 14);
+      ctx.roundRect(cell.x - (CONFIG.size*2.0), cell.y - (CONFIG.size*1.25),
+                    CONFIG.size*4.0, CONFIG.size*2.5, 14);
       ctx.fillStyle = 'rgba(255,255,255,.05)';
       ctx.fill();
       ctx.lineWidth = 1.2;
@@ -996,76 +960,60 @@
         phase = 'TRACK';
         phaseEl.textContent = phase;
       }
-      if (phase === 'CUE' || phase === 'TRACK'){
-        stepTracker(dt);
-      }
-      if (phase === 'TRACK' && ms >= (CONFIG.showTargetMs + CONFIG.moveMs)){
-        stopRun(now);
-      }
+      if (phase === 'CUE' || phase === 'TRACK') stepTracker(dt);
+      if (phase === 'TRACK' && ms >= (CONFIG.showTargetMs + CONFIG.moveMs)) stopRun(now);
     } else {
       const gridCueMs = 700;
       if (phase === 'CUE' && ms >= gridCueMs){
         phase = 'TRACK';
         phaseEl.textContent = phase;
       }
-      if (phase === 'CUE' || phase === 'TRACK'){
-        stepGrid(dt);
-      }
-      if (phase === 'TRACK' && ms >= (gridCueMs + CONFIG.moveMs)){
-        stopRun(now);
-      }
+      if (phase === 'CUE' || phase === 'TRACK') stepGrid(dt);
+      if (phase === 'TRACK' && ms >= (gridCueMs + CONFIG.moveMs)) stopRun(now);
     }
 
     draw(now);
     if (running) requestAnimationFrame(loop);
   }
 
-  // ========= Controls =========
-  startBtn.addEventListener('click', () => {
-    if (phase === 'READY') startRun();
-    else { newTrial(); startRun(); }
-  });
-  overlayStart.addEventListener('click', () => startRun());
-  overlayMenu.addEventListener('click', () => drawer.classList.add('open'));
+  // ===== Controls (robust iPad) =====
+  startBtn.addEventListener('click', () => handleAction(performance.now()));
+  revealBtn.addEventListener('click', () => handleAction(performance.now()));
 
   stopBtn.addEventListener('click', () => {
-    if (running) stopRun(performance.now());
-    else if (phase === 'STOP') reveal(performance.now());
-  });
-
-// Tap/click sur la zone de jeu = même logique que ESPACE (iPad friendly)
-function handleAction(now){
-  if (running) stopRun(now);
-  else if (phase === 'STOP') reveal(now);
-  else if (phase === 'READY') startRun();
-  else { newTrial(); startRun(); }
-}
-
-// Click souris
-canvas.addEventListener('click', (e) => {
-  e.preventDefault();
-  handleAction(performance.now());
-});
-
-// Touch (iPad) — on bloque le scroll/double-tap
-canvas.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  handleAction(performance.now());
-}, { passive: false });
-  
-  document.addEventListener('keydown', (e) => {
-  const k = (e.key || '').toLowerCase();
-  if (e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar'){
-    e.preventDefault();
     const now = performance.now();
     if (running) stopRun(now);
     else if (phase === 'STOP') reveal(now);
-    else if (phase === 'READY') startRun();
-    else { newTrial(); startRun(); }
-  }
-  if (k === 'm') drawer.classList.toggle('open');
-  if (k === 'n') newTrial();
-});
+  });
+
+  overlayStart.addEventListener('click', () => startRun());
+  overlayMenu.addEventListener('click', () => drawer.classList.add('open'));
+
+  // Pointer is most reliable across iPad + desktop
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch(_){}
+    handleAction(performance.now());
+  }, { passive:false });
+
+  // Fallback touch
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    handleAction(performance.now());
+  }, { passive:false });
+
+  // Keyboard (optional)
+  document.addEventListener('keydown', (e) => {
+    const key = e.key;
+    const code = e.code;
+    if (code === 'Space' || key === ' ' || key === 'Spacebar'){
+      e.preventDefault();
+      handleAction(performance.now());
+    }
+    const k = (key || '').toLowerCase();
+    if (k === 'm') drawer.classList.toggle('open');
+    if (k === 'n') newTrial();
+  });
 
   // roundRect fallback
   if (!ctx.roundRect){
@@ -1088,8 +1036,27 @@ canvas.addEventListener('touchstart', (e) => {
 
   modeSel.addEventListener('change', () => { applyFromControls(); newTrial(); });
 
-  // Init
-  syncUI();
+  function initDefaults(){
+    // defaults controls
+    speedSlider.value = CONFIG.speed;
+    moveSlider.value = Math.round(CONFIG.moveMs/1000);
+    sizeSlider.value = CONFIG.size;
+    fixationSel.value = CONFIG.fixation;
+    gamifySel.value = CONFIG.gamify;
+    blinkModeSel.value = CONFIG.blinkMode;
+    blinkCountSlider.value = CONFIG.blinkCount;
+    blinkDurSlider.value = CONFIG.blinkDurMs;
+
+    stimulusSel.value = CONFIG.stimulus;
+    cueSlider.value = CONFIG.showTargetMs;
+    nSlider.value = CONFIG.nDots;
+    tSlider.value = CONFIG.nTargets;
+    chaosSlider.value = CONFIG.chaos;
+
+    gridSizeSel.value = String(CONFIG.gridN);
+  }
+
+  initDefaults();
   applyFromControls();
   newTrial();
 })();
