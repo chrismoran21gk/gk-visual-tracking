@@ -892,8 +892,8 @@
         if (CONFIG.stimulus === 'color') color = TARGET_CUE;
       }
       if (phase === 'REVEAL' && targetIds.includes(d.id)){
-        color = REVEAL_OK;
-      }
+  color = TARGET_CUE; // = rouge
+}
 
       ctx.beginPath();
       ctx.arc(d.x, d.y, CONFIG.size, 0, Math.PI*2);
