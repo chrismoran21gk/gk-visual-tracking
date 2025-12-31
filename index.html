@@ -160,7 +160,7 @@
       <img id="logo" alt="Logo" />
       <div style="min-width:0">
         <div class="title">GK Visual Lab</div>
-        <div class="subtitle" id="subtitle">Tap écran / clic = Start • Stop • Reveal</div>
+        <div class="subtitle" id="subtitle">Tap / clic = Start • Stop • Reveal</div>
       </div>
     </div>
     <div style="display:flex; gap:8px; align-items:center;">
@@ -174,7 +174,7 @@
     <div class="rowline">
       <div>
         <div style="font-weight:850">Menu</div>
-        <div class="label">Choisis le mini-jeu + réglages</div>
+        <div class="label">Mini-jeu + réglages</div>
       </div>
       <button class="btn" id="stopBtn">Stop</button>
     </div>
@@ -225,7 +225,7 @@
     <div class="row">
       <div class="rowline" style="margin-bottom:6px">
         <div>
-          <div class="label">Croix centrale (périphérie)</div>
+          <div class="label">Croix centrale</div>
           <div class="val"><span id="fixVal"></span></div>
         </div>
         <select id="fixation">
@@ -243,35 +243,6 @@
           <option value="off" selected>Off</option>
           <option value="on">On</option>
         </select>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="rowline" style="margin-bottom:6px">
-        <div>
-          <div class="label">Blink (occlusion)</div>
-          <div class="val"><span id="blinkVal"></span></div>
-        </div>
-        <select id="blinkMode">
-          <option value="off" selected>Off</option>
-          <option value="on">On</option>
-        </select>
-      </div>
-
-      <div class="rowline">
-        <div>
-          <div class="label">Nb blinks</div>
-          <div class="val"><span id="blinkCountVal"></span></div>
-        </div>
-        <input id="blinkCount" type="range" min="0" max="8" step="1" />
-      </div>
-
-      <div class="rowline" style="margin-top:10px">
-        <div>
-          <div class="label">Durée blink (ms)</div>
-          <div class="val"><span id="blinkDurVal"></span></div>
-        </div>
-        <input id="blinkDur" type="range" min="60" max="400" step="20" />
       </div>
     </div>
 
@@ -318,6 +289,10 @@
         </div>
         <input id="chaos" type="range" min="0" max="0.9" step="0.05" />
       </div>
+
+      <div class="hint">
+        Astuce: en phase REVEAL, un tap/clic prépare un nouvel essai (sans démarrer).
+      </div>
     </div>
 
     <div class="row" id="gridBlock" style="display:none">
@@ -332,14 +307,10 @@
           <option value="6">6×6</option>
         </select>
       </div>
-
-      <div class="hint" style="margin-top:10px">
-        Mode chaos : lettres + chiffres colorés qui bougent. (Pas de cible affichée.)
-      </div>
     </div>
 
     <div class="hint">
-      Tap écran = action • <kbd>ESPACE</kbd> aussi • <kbd>M</kbd> menu • <kbd>N</kbd> nouvel essai
+      Tap / clic sur le terrain = action. <kbd>ESPACE</kbd> aussi. <kbd>M</kbd> menu. <kbd>N</kbd> nouvel essai.
     </div>
   </div>
 
@@ -365,8 +336,7 @@
   <div id="overlay">
     <div id="card">
       <h2>GK Visual Lab — prêt</h2>
-      <p>Sur iPad : <b>touche l’écran</b> pour Start/Stop/Reveal.</p>
-      <p>Tu peux aussi utiliser <b>Démarrer</b> et le bouton <b>Reveal</b> (qui apparaît en STOP).</p>
+      <p><b>Démarrer</b> ou tap/clic sur le terrain. STOP est automatique. Ensuite <b>Reveal</b> (bouton ou tap/clic).</p>
       <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
         <button class="btn primary" id="overlayStart">Démarrer</button>
         <button class="btn" id="overlayMenu">Ouvrir menu</button>
@@ -377,7 +347,8 @@
 
 <script>
 (() => {
-  const LOGO_PATH = "xamaxlogo.png"; // optionnel
+  // Logo optionnel
+  const LOGO_PATH = "xamaxlogo.png";
   const logoEl = document.getElementById('logo');
   logoEl.onerror = () => { logoEl.style.display = "none"; };
   if (LOGO_PATH) logoEl.src = LOGO_PATH; else logoEl.style.display = "none";
@@ -419,13 +390,6 @@
   const gamifySel = document.getElementById('gamify');
   const gameValEl = document.getElementById('gameVal');
 
-  const blinkModeSel = document.getElementById('blinkMode');
-  const blinkValEl = document.getElementById('blinkVal');
-  const blinkCountSlider = document.getElementById('blinkCount');
-  const blinkCountValEl = document.getElementById('blinkCountVal');
-  const blinkDurSlider = document.getElementById('blinkDur');
-  const blinkDurValEl = document.getElementById('blinkDurVal');
-
   const trackerBlock = document.getElementById('trackerBlock');
   const stimulusSel = document.getElementById('stimulus');
   const stimValEl = document.getElementById('stimVal');
@@ -452,13 +416,8 @@
     speed: 260,
     moveMs: 7000,
     size: 18,
-
     fixation: 'off',
     gamify: 'off',
-
-    blinkMode: 'off',
-    blinkCount: 2,
-    blinkDurMs: 140,
 
     stimulus: 'color',
     showTargetMs: 900,
@@ -479,8 +438,8 @@
   let targetIds = [];
   let grid = [];
 
-  let blinkTimes = [];
-  let blinkActive = false;
+  // anti double-trigger
+  let lastActionAt = 0;
 
   // gamify
   let stopAt = null;
@@ -491,8 +450,8 @@
 
   const BG = '#0b0b0b';
   const DOT = '#e6e6e6';
-  const TARGET_CUE = '#e10600';
-  const REVEAL_OK = '#34c759';
+  const TARGET_CUE = '#e10600'; // rouge
+  const REVEAL_RING = '#34c759'; // contour vert
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -546,13 +505,6 @@
     gamifySel.value = CONFIG.gamify;
     gameValEl.textContent = (CONFIG.gamify === 'on') ? 'On' : 'Off';
 
-    blinkModeSel.value = CONFIG.blinkMode;
-    blinkValEl.textContent = (CONFIG.blinkMode === 'on') ? 'On' : 'Off';
-    blinkCountSlider.value = CONFIG.blinkCount;
-    blinkCountValEl.textContent = CONFIG.blinkCount;
-    blinkDurSlider.value = CONFIG.blinkDurMs;
-    blinkDurValEl.textContent = CONFIG.blinkDurMs;
-
     stimulusSel.value = CONFIG.stimulus;
     stimValEl.textContent = CONFIG.stimulus === 'color' ? 'Couleur' : 'Numéros';
     cueSlider.value = CONFIG.showTargetMs;
@@ -570,7 +522,7 @@
     trackerBlock.style.display = (CONFIG.mode === 'tracker') ? 'block' : 'none';
     gridBlock.style.display = (CONFIG.mode === 'grid') ? 'block' : 'none';
 
-    subtitleEl.textContent = running ? 'En cours (tap = Stop)' : 'Tap écran / clic = Start • Stop • Reveal';
+    subtitleEl.textContent = running ? 'En cours (tap/clic = Stop)' : 'Tap/clic = Start • Stop • Reveal';
 
     updateScoreUI();
     updateActionButtons();
@@ -584,10 +536,6 @@
 
     CONFIG.fixation = fixationSel.value;
     CONFIG.gamify = gamifySel.value;
-
-    CONFIG.blinkMode = blinkModeSel.value;
-    CONFIG.blinkCount = parseInt(blinkCountSlider.value, 10);
-    CONFIG.blinkDurMs = parseInt(blinkDurSlider.value, 10);
 
     CONFIG.stimulus = stimulusSel.value;
     CONFIG.showTargetMs = parseInt(cueSlider.value, 10);
@@ -603,7 +551,6 @@
   [
     modeSel, speedSlider, moveSlider, sizeSlider,
     fixationSel, gamifySel,
-    blinkModeSel, blinkCountSlider, blinkDurSlider,
     stimulusSel, cueSlider, nSlider, tSlider, chaosSlider,
     gridSizeSel
   ].forEach(el => el.addEventListener('input', applyFromControls));
@@ -695,22 +642,6 @@
     }
   }
 
-  function scheduleBlinks(){
-    blinkTimes = [];
-    blinkActive = false;
-
-    if (CONFIG.blinkMode !== 'on' || CONFIG.blinkCount <= 0) return;
-
-    const cueMs = (CONFIG.mode === 'tracker') ? CONFIG.showTargetMs : 700;
-    const totalMs = cueMs + CONFIG.moveMs;
-
-    for (let i = 0; i < CONFIG.blinkCount; i++) {
-      const t = (0.20 + Math.random() * 0.70) * totalMs;
-      blinkTimes.push(t);
-    }
-    blinkTimes.sort((a,b)=>a-b);
-  }
-
   function resetGamifyTrial(){
     stopAt = null;
   }
@@ -743,10 +674,7 @@
     last = t0;
     phase = 'CUE';
     phaseEl.textContent = phase;
-
-    scheduleBlinks();
     resetGamifyTrial();
-
     requestAnimationFrame(loop);
     syncUI();
   }
@@ -774,11 +702,20 @@
     syncUI();
   }
 
+  function safeAction(now){
+    // anti double trigger (double click / trackpad / pointer quirks)
+    if (now - lastActionAt < 250) return;
+    lastActionAt = now;
+    handleAction(now);
+  }
+
   function handleAction(now){
-    if (running) stopRun(now);
-    else if (phase === 'STOP') reveal(now);
-    else if (phase === 'READY') startRun();
-    else { newTrial(); startRun(); }
+    if (running) { stopRun(now); return; }
+    if (phase === 'STOP') { reveal(now); return; }
+    if (phase === 'REVEAL') { newTrial(); return; } // IMPORTANT: ne redémarre pas
+    if (phase === 'READY') { startRun(); return; }
+    // fallback
+    newTrial();
   }
 
   function stepTracker(dt){
@@ -816,17 +753,6 @@
     }
   }
 
-  function computeBlink(ms){
-    blinkActive = false;
-    if (CONFIG.blinkMode !== 'on' || blinkTimes.length === 0) return;
-    for (const tb of blinkTimes) {
-      if (ms >= tb && ms <= tb + CONFIG.blinkDurMs) {
-        blinkActive = true;
-        break;
-      }
-    }
-  }
-
   function drawFixationCross(){
     if (CONFIG.fixation !== 'on') return;
     const cx = canvas.width / 2;
@@ -840,15 +766,6 @@
     ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s, cy);
     ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy + s);
     ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawBlink(){
-    if (!blinkActive || !running) return;
-    if (phase !== 'CUE' && phase !== 'TRACK') return;
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.92)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
   }
 
@@ -870,15 +787,14 @@
 
     ctx.fillStyle = 'rgba(255,255,255,.85)';
     ctx.font = '22px system-ui, -apple-system, Segoe UI, Roboto';
-    if (!running && phase === 'READY') ctx.fillText('Prêt — Tap écran / Démarrer', 24, 44);
-    if (phase === 'STOP') ctx.fillText('STOP — Tap écran / Reveal', 24, 44);
-    if (phase === 'REVEAL') ctx.fillText('RÉVÉLATION', 24, 44);
+    if (!running && phase === 'READY') ctx.fillText('Prêt — Démarrer / tap', 24, 44);
+    if (phase === 'STOP') ctx.fillText('STOP — Reveal (bouton ou tap)', 24, 44);
+    if (phase === 'REVEAL') ctx.fillText('RÉVÉLATION — tap pour nouvel essai', 24, 44);
 
     if (CONFIG.mode === 'tracker') drawTracker();
     else drawGrid();
 
     drawFixationCross();
-    drawBlink();
   }
 
   function drawTracker(){
@@ -888,12 +804,16 @@
     for (const d of dots){
       let color = DOT;
 
-      if (showCue && targetIds.includes(d.id)){
-        if (CONFIG.stimulus === 'color') color = TARGET_CUE;
+      // Cue (mode couleur) : cible(s) rouges
+      if (showCue && targetIds.includes(d.id) && CONFIG.stimulus === 'color'){
+        color = TARGET_CUE;
       }
-      if (phase === 'REVEAL' && targetIds.includes(d.id)){
-  color = TARGET_CUE; // = rouge
-}
+
+      // Reveal : on revoit les cibles en ROUGE + contour VERT (hyper lisible)
+      const isTarget = targetIds.includes(d.id);
+      if (phase === 'REVEAL' && isTarget){
+        color = TARGET_CUE;
+      }
 
       ctx.beginPath();
       ctx.arc(d.x, d.y, CONFIG.size, 0, Math.PI*2);
@@ -903,12 +823,30 @@
       ctx.strokeStyle = '#111';
       ctx.stroke();
 
+      // contour vert en reveal pour les cibles
+      if (phase === 'REVEAL' && isTarget){
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = REVEAL_RING;
+        ctx.stroke();
+      }
+
+      // Numéros : plus gras + contour (lisibilité)
       if (showNumbers){
-        ctx.fillStyle = '#111';
-        ctx.font = `${Math.max(12, CONFIG.size)}px system-ui, -apple-system, Segoe UI, Roboto`;
+        ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        const fs = Math.max(14, Math.floor(CONFIG.size * 1.15));
+        ctx.font = `800 ${fs}px system-ui, -apple-system, Segoe UI, Roboto`;
+
+        // contour clair
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(255,255,255,.85)';
+        ctx.strokeText(d.label, d.x, d.y+1);
+
+        // remplissage sombre
+        ctx.fillStyle = '#111';
         ctx.fillText(d.label, d.x, d.y+1);
+        ctx.restore();
       }
     }
 
@@ -922,6 +860,8 @@
       else ctx.fillText('Mémorise les numéros des cibles', 24, canvas.height-24);
     } else if (phase === 'TRACK'){
       ctx.fillText('Tracking — tout identique', 24, canvas.height-24);
+    } else if (phase === 'REVEAL'){
+      ctx.fillText('Cibles = rouge + contour vert', 24, canvas.height-24);
     }
   }
 
@@ -953,8 +893,6 @@
     last = now;
     const ms = now - t0;
 
-    computeBlink(ms);
-
     if (CONFIG.mode === 'tracker'){
       if (phase === 'CUE' && ms >= CONFIG.showTargetMs){
         phase = 'TRACK';
@@ -976,9 +914,9 @@
     if (running) requestAnimationFrame(loop);
   }
 
-  // ===== Controls (robust iPad) =====
-  startBtn.addEventListener('click', () => handleAction(performance.now()));
-  revealBtn.addEventListener('click', () => handleAction(performance.now()));
+  // ===== Controls (robust) =====
+  startBtn.addEventListener('click', () => safeAction(performance.now()));
+  revealBtn.addEventListener('click', () => safeAction(performance.now()));
 
   stopBtn.addEventListener('click', () => {
     const now = performance.now();
@@ -989,33 +927,23 @@
   overlayStart.addEventListener('click', () => startRun());
   overlayMenu.addEventListener('click', () => drawer.classList.add('open'));
 
-  // Pointer is most reliable across iPad + desktop
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    try { canvas.setPointerCapture(e.pointerId); } catch(_){}
-    handleAction(performance.now());
+    safeAction(performance.now());
   }, { passive:false });
 
-  // Fallback touch
-  canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    handleAction(performance.now());
-  }, { passive:false });
-
-  // Keyboard (optional)
   document.addEventListener('keydown', (e) => {
     const key = e.key;
     const code = e.code;
     if (code === 'Space' || key === ' ' || key === 'Spacebar'){
       e.preventDefault();
-      handleAction(performance.now());
+      safeAction(performance.now());
     }
     const k = (key || '').toLowerCase();
     if (k === 'm') drawer.classList.toggle('open');
     if (k === 'n') newTrial();
   });
 
-  // roundRect fallback
   if (!ctx.roundRect){
     CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
       r = Math.min(r, w/2, h/2);
@@ -1037,15 +965,12 @@
   modeSel.addEventListener('change', () => { applyFromControls(); newTrial(); });
 
   function initDefaults(){
-    // defaults controls
     speedSlider.value = CONFIG.speed;
     moveSlider.value = Math.round(CONFIG.moveMs/1000);
     sizeSlider.value = CONFIG.size;
+
     fixationSel.value = CONFIG.fixation;
     gamifySel.value = CONFIG.gamify;
-    blinkModeSel.value = CONFIG.blinkMode;
-    blinkCountSlider.value = CONFIG.blinkCount;
-    blinkDurSlider.value = CONFIG.blinkDurMs;
 
     stimulusSel.value = CONFIG.stimulus;
     cueSlider.value = CONFIG.showTargetMs;
