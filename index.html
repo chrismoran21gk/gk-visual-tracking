@@ -685,6 +685,7 @@
     phaseEl.textContent = phase;
     stopAt = now ?? performance.now();
     syncUI();
+    draw(performance.now());
   }
 
   function reveal(now){
@@ -700,6 +701,7 @@
     }
     updateScoreUI();
     syncUI();
+    draw(performance.now());
   }
 
   function safeAction(now){
