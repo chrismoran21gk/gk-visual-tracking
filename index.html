@@ -54,7 +54,7 @@
 
     #drawer{
       position: fixed; right: 12px; top: 64px;
-      width: 380px;
+      width: 390px;
       max-width: calc(100vw - 24px);
       background: var(--panel);
       border:1px solid var(--stroke);
@@ -103,7 +103,7 @@
     .hint{ font-size:12px; color: var(--muted); margin-top:6px; line-height: 1.25; }
     kbd { background: rgba(255,255,255,.06); border:1px solid var(--stroke); padding:2px 6px; border-radius:8px; color:#fff; }
 
-    /* Start overlay (Stop & Go) */
+    /* Stop & Go overlay */
     #overlay{
       position: fixed; inset: 0;
       display:flex; align-items:center; justify-content:center;
@@ -112,7 +112,7 @@
       padding: 18px;
     }
     #card{
-      width: 520px; max-width: calc(100vw - 36px);
+      width: 560px; max-width: calc(100vw - 36px);
       background: rgba(10,10,10,.86);
       border:1px solid var(--stroke);
       border-radius: 18px;
@@ -138,7 +138,6 @@
 
 <body>
   <div id="wrap">
-    <!-- Zone de jeu (on l’agrandit déjà un peu) -->
     <canvas id="c" width="1200" height="720"></canvas>
   </div>
 
@@ -173,7 +172,7 @@
         </div>
         <select id="mode">
           <option value="tracker">Tracker (MOT)</option>
-          <option value="grid">Visual Search (grille)</option>
+          <option value="grid">Visual Search (chaos)</option>
         </select>
       </div>
     </div>
@@ -261,26 +260,14 @@
         </select>
       </div>
 
-      <div class="rowline" style="margin-top:10px">
-        <div>
-          <div class="label">Type stimulus</div>
-          <div class="val"><span id="gridStimVal"></span></div>
-        </div>
-        <select id="gridStim">
-          <option value="numbers" selected>Nombres</option>
-          <option value="letters">Lettres</option>
-          <option value="mix">Mix</option>
-        </select>
-      </div>
-
       <div class="hint" style="margin-top:10px">
-        En “Visual Search”, la cible est indiquée avant le départ, puis la grille bouge.
-        À STOP, tu révèles / tu valides avec le coach.
+        Mode “chaos pur” : lettres + chiffres de couleurs aléatoires qui bougent.
+        Pas de cible affichée dans ce mode.
       </div>
     </div>
 
     <div class="hint">
-      Raccourcis: <kbd>ESPACE</kbd> Start/Stop • <kbd>M</kbd> menu • <kbd>N</kbd> nouvel essai
+      Raccourcis: <kbd>ESPACE</kbd> Start/Stop/Reveal • <kbd>M</kbd> menu • <kbd>N</kbd> nouvel essai
     </div>
   </div>
 
@@ -294,12 +281,11 @@
     <div id="bar"><div id="fill"></div></div>
   </div>
 
-  <!-- Stop & Go overlay -->
   <div id="overlay">
     <div id="card">
       <h2>GK Visual Lab — prêt</h2>
       <p>Rien ne démarre tout seul. Clique <b>Démarrer</b> ou appuie sur <b>ESPACE</b>.</p>
-      <p>Tu peux changer de mini-jeu dans le menu ☰ : <b>Tracker</b> (suivi) ou <b>Visual Search</b> (grille).</p>
+      <p>Menu ☰ : <b>Tracker</b> (suivi) ou <b>Visual Search</b> (chaos).</p>
       <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
         <button class="btn primary" id="overlayStart">Démarrer</button>
         <button class="btn" id="overlayMenu">Ouvrir menu</button>
@@ -311,9 +297,9 @@
 <script>
 (() => {
   // ===== Logo (optionnel) =====
-  const LOGO_PATH = "xamaxlogo.png"; // laisse comme ça si ton fichier est à la racine
+  const LOGO_PATH = "xamaxlogo.png"; // met "" si tu veux le cacher
   const logoEl = document.getElementById('logo');
-  logoEl.onerror = () => { logoEl.style.display = "none"; }; // ne casse jamais l’app
+  logoEl.onerror = () => { logoEl.style.display = "none"; };
   if (LOGO_PATH) logoEl.src = LOGO_PATH; else logoEl.style.display = "none";
 
   const canvas = document.getElementById('c');
@@ -363,8 +349,6 @@
   const gridBlock = document.getElementById('gridBlock');
   const gridSizeSel = document.getElementById('gridSize');
   const gridValEl = document.getElementById('gridVal');
-  const gridStimSel = document.getElementById('gridStim');
-  const gridStimValEl = document.getElementById('gridStimVal');
 
   // ===== Config =====
   const CONFIG = {
@@ -381,7 +365,6 @@
 
     // grid
     gridN: 5,
-    gridStim: 'numbers', // numbers | letters | mix
   };
 
   // ===== State =====
@@ -397,8 +380,7 @@
   let targetId = 0;
 
   // grid state
-  let grid = []; // cells with x,y,vx,vy,text,isTarget
-  let gridTargetText = '';
+  let grid = []; // {x,y,vx,vy,text,color}
 
   // Colors
   const BG = '#0b0b0b';
@@ -408,6 +390,14 @@
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  function randomBrightColor(){
+    // couleurs vives mais lisibles sur fond noir
+    const h = (Math.random()*360)|0;
+    const s = 85;
+    const l = 60;
+    return `hsl(${h} ${s}% ${l}%)`;
+  }
 
   function setError(msg){
     errBox.style.display = "block";
@@ -439,8 +429,6 @@
 
     gridSizeSel.value = String(CONFIG.gridN);
     gridValEl.textContent = `${CONFIG.gridN}×${CONFIG.gridN}`;
-    gridStimSel.value = CONFIG.gridStim;
-    gridStimValEl.textContent = (CONFIG.gridStim === 'numbers') ? 'Nombres' : (CONFIG.gridStim === 'letters') ? 'Lettres' : 'Mix';
 
     trackerBlock.style.display = (CONFIG.mode === 'tracker') ? 'block' : 'none';
     gridBlock.style.display = (CONFIG.mode === 'grid') ? 'block' : 'none';
@@ -462,19 +450,17 @@
     CONFIG.chaos = parseFloat(chaosSlider.value);
 
     CONFIG.gridN = parseInt(gridSizeSel.value, 10);
-    CONFIG.gridStim = gridStimSel.value;
 
     syncUI();
   }
 
-  [modeSel, speedSlider, moveSlider, sizeSlider, stimulusSel, cueSlider, nSlider, chaosSlider, gridSizeSel, gridStimSel]
+  [modeSel, speedSlider, moveSlider, sizeSlider, stimulusSel, cueSlider, nSlider, chaosSlider, gridSizeSel]
     .forEach(el => el.addEventListener('input', applyFromControls));
 
   toggleBtn.addEventListener('click', () => drawer.classList.toggle('open'));
 
   // ========= Resize =========
   function resizeToFit(){
-    // On maximise l’espace dispo en tenant compte des barres
     const topOffset = 84;
     const bottomOffset = 88;
     const sideOffset = 24;
@@ -482,7 +468,7 @@
     const maxW = window.innerWidth - sideOffset;
     const maxH = window.innerHeight - topOffset - bottomOffset;
 
-    const aspect = canvas.width / canvas.height; // 1200/720 par défaut
+    const aspect = canvas.width / canvas.height; // 1200/720
     let w = maxW;
     let h = w / aspect;
     if (h > maxH) { h = maxH; w = h * aspect; }
@@ -506,30 +492,21 @@
         y: rand(CONFIG.size, H-CONFIG.size),
         vx: Math.cos(angle)*sp,
         vy: Math.sin(angle)*sp,
-        label: String(i+1) // numéros 1..n
+        label: String(i+1)
       });
     }
     targetId = Math.floor(rand(0, CONFIG.nDots));
   }
 
-  function pickStimText(){
-    const n = CONFIG.gridN * CONFIG.gridN;
-    const texts = [];
-    if (CONFIG.gridStim === 'numbers' || CONFIG.gridStim === 'mix'){
-      for (let i=0;i<n;i++) texts.push(String(rand(10,99)|0));
+  function pickChaosTexts(n){
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I/O
+    const out = [];
+    for (let i=0;i<n;i++){
+      const chooseNumber = Math.random() < 0.5;
+      if (chooseNumber) out.push(String((Math.random()*10)|0)); // 0-9
+      else out.push(alphabet[(Math.random()*alphabet.length)|0]);
     }
-    if (CONFIG.gridStim === 'letters' || CONFIG.gridStim === 'mix'){
-      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I/O
-      while (texts.length < n){
-        texts.push(alphabet[(Math.random()*alphabet.length)|0]);
-      }
-    }
-    // shuffle
-    for (let i=texts.length-1;i>0;i--){
-      const j = (Math.random()*(i+1))|0;
-      [texts[i],texts[j]]=[texts[j],texts[i]];
-    }
-    return texts.slice(0,n);
+    return out;
   }
 
   function buildGrid(){
@@ -537,31 +514,28 @@
     const N = CONFIG.gridN;
     const W = canvas.width, H = canvas.height;
 
-    const cellPad = 12;
-    const usableW = W - cellPad*2;
-    const usableH = H - cellPad*2;
+    const pad = 18;
+    const usableW = W - pad*2;
+    const usableH = H - pad*2;
 
     const cellW = usableW / N;
     const cellH = usableH / N;
 
-    const texts = pickStimText();
-    const targetIndex = (Math.random()*texts.length)|0;
-    gridTargetText = texts[targetIndex];
+    const texts = pickChaosTexts(N*N);
 
-    // chaque cellule “bouge” légèrement (layout qui bouge)
     let k = 0;
     for (let r=0;r<N;r++){
       for (let c=0;c<N;c++){
-        const x0 = cellPad + c*cellW + cellW/2;
-        const y0 = cellPad + r*cellH + cellH/2;
+        const x0 = pad + c*cellW + cellW/2;
+        const y0 = pad + r*cellH + cellH/2;
         const angle = rand(0, Math.PI*2);
-        const sp = rand(CONFIG.speed*0.15, CONFIG.speed*0.35); // plus lent que le tracker
+        const sp = rand(CONFIG.speed*0.15, CONFIG.speed*0.40); // plus lent que tracker
         grid.push({
           x:x0, y:y0,
           vx: Math.cos(angle)*sp,
           vy: Math.sin(angle)*sp,
           text: texts[k],
-          isTarget: (k===targetIndex)
+          color: randomBrightColor()
         });
         k++;
       }
@@ -572,6 +546,7 @@
     applyFromControls();
     trials++;
     trialsEl.textContent = trials;
+
     phase = 'READY';
     running = false;
     phaseEl.textContent = phase;
@@ -579,7 +554,6 @@
     timeEl.textContent = '0.00';
     overlay.style.display = 'flex';
 
-    // prépare le contenu
     if (CONFIG.mode === 'tracker') buildTracker();
     else buildGrid();
 
@@ -627,7 +601,6 @@
       d.x += d.vx*dt;
       d.y += d.vy*dt;
 
-      // bounce
       if (d.x < CONFIG.size) { d.x = CONFIG.size; d.vx *= -1; }
       if (d.x > W-CONFIG.size) { d.x = W-CONFIG.size; d.vx *= -1; }
       if (d.y < CONFIG.size) { d.y = CONFIG.size; d.vy *= -1; }
@@ -637,11 +610,11 @@
 
   function stepGrid(dt){
     const W = canvas.width, H = canvas.height;
-    const pad = 14;
+    const pad = 22;
     for (const cell of grid){
       cell.x += cell.vx*dt;
       cell.y += cell.vy*dt;
-      // rebonds doux
+
       if (cell.x < pad) { cell.x = pad; cell.vx *= -1; }
       if (cell.x > W-pad) { cell.x = W-pad; cell.vx *= -1; }
       if (cell.y < pad) { cell.y = pad; cell.vy *= -1; }
@@ -659,13 +632,9 @@
     if (running){
       const elapsed = (now - t0) / 1000;
       timeEl.textContent = elapsed.toFixed(2);
-    }
 
-    const totalMsToStop = (CONFIG.mode === 'tracker')
-      ? (CONFIG.showTargetMs + CONFIG.moveMs)
-      : (1200 + CONFIG.moveMs); // cue fixe pour la grille
-
-    if (running){
+      const cueMs = (CONFIG.mode === 'tracker') ? CONFIG.showTargetMs : 700;
+      const totalMsToStop = cueMs + CONFIG.moveMs;
       const p = clamp((now - t0) / totalMsToStop, 0, 1);
       fillEl.style.width = (p*100).toFixed(1)+'%';
     }
@@ -679,10 +648,8 @@
     if (phase === 'STOP'){
       ctx.fillText('STOP — ESPACE pour révéler', 24, 44);
     }
-    if (CONFIG.mode === 'grid'){
-      ctx.font = '18px system-ui, -apple-system, Segoe UI, Roboto';
-      ctx.fillStyle = 'rgba(255,255,255,.75)';
-      ctx.fillText(`Cible: ${gridTargetText}`, 24, 74);
+    if (phase === 'REVEAL'){
+      ctx.fillText('RÉVÉLATION', 24, 44);
     }
 
     // render game
@@ -692,12 +659,14 @@
 
   function drawTracker(){
     const showCue = (phase === 'CUE');
-    const showNumbers = (CONFIG.stimulus === 'number') && showCue; // numéros visibles uniquement pendant cue
+    const showNumbers = (CONFIG.stimulus === 'number') && showCue;
 
     for (const d of dots){
       let color = DOT;
+
+      // Cible
       if (showCue && d.id === targetId){
-        color = (CONFIG.stimulus === 'color') ? TARGET_CUE : DOT; // si number: pas de couleur spéciale
+        if (CONFIG.stimulus === 'color') color = TARGET_CUE;
       }
       if (phase === 'REVEAL' && d.id === targetId){
         color = REVEAL_OK;
@@ -712,7 +681,7 @@
       ctx.strokeStyle = '#111';
       ctx.stroke();
 
-      // numéros (cue seulement si mode number)
+      // numéros (cue uniquement)
       if (showNumbers){
         ctx.fillStyle = '#111';
         ctx.font = `${Math.max(12, CONFIG.size)}px system-ui, -apple-system, Segoe UI, Roboto`;
@@ -727,6 +696,7 @@
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = 'rgba(255,255,255,.70)';
     ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto';
+
     if (phase === 'CUE'){
       if (CONFIG.stimulus === 'color') ctx.fillText('Cible rouge (mémorise)', 24, canvas.height-24);
       else ctx.fillText('Mémorise le numéro de la cible', 24, canvas.height-24);
@@ -736,78 +706,57 @@
   }
 
   function drawGrid(){
-    // Dessine les items comme des “pastilles” texte
+    // “chaos pur”: pas de cible, juste lettres/chiffres colorés qui bougent
     for (const cell of grid){
-      const isCue = (phase === 'CUE');
-      const showTarget = (phase === 'REVEAL' && cell.isTarget);
-
-      // bulle
+      // petit fond discret (peut être supprimé si tu veux 100% texte)
       ctx.beginPath();
-      ctx.roundRect(cell.x - (CONFIG.size*2.2), cell.y - (CONFIG.size*1.35), CONFIG.size*4.4, CONFIG.size*2.7, 14);
-      ctx.fillStyle = showTarget ? 'rgba(52,199,89,.85)' : 'rgba(255,255,255,.06)';
+      ctx.roundRect(cell.x - (CONFIG.size*2.0), cell.y - (CONFIG.size*1.25), CONFIG.size*4.0, CONFIG.size*2.5, 14);
+      ctx.fillStyle = 'rgba(255,255,255,.05)';
       ctx.fill();
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = showTarget ? 'rgba(52,199,89,.95)' : 'rgba(255,255,255,.10)';
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = 'rgba(255,255,255,.08)';
       ctx.stroke();
 
-      // texte
-      ctx.fillStyle = '#fff';
+      // texte coloré
+      ctx.fillStyle = cell.color;
       ctx.font = `${Math.max(14, CONFIG.size)}px system-ui, -apple-system, Segoe UI, Roboto`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(cell.text, cell.x, cell.y);
-
-      // cue visuel léger sur la cible (seulement pendant cue)
-      if (isCue && cell.isTarget){
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = 'rgba(225,6,0,.95)';
-        ctx.stroke();
-      }
     }
-
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
   }
 
-  // ========= Main loop =========
   function loop(now){
     if (!running) { draw(now); return; }
 
     const dt = (now - last)/1000;
     last = now;
-
     const ms = now - t0;
 
-    // Phase transitions selon mode
     if (CONFIG.mode === 'tracker'){
-      // CUE -> TRACK
       if (phase === 'CUE' && ms >= CONFIG.showTargetMs){
         phase = 'TRACK';
         phaseEl.textContent = phase;
       }
-
-      // Sim step tant qu’on est en CUE ou TRACK
       if (phase === 'CUE' || phase === 'TRACK'){
         stepTracker(dt);
       }
-
-      // Auto STOP
       if (phase === 'TRACK' && ms >= (CONFIG.showTargetMs + CONFIG.moveMs)){
         stopRun();
       }
     } else {
-      // Grid : cue fixe 1200ms (cible entourée en rouge), puis bouge
-      const gridCueMs = 1200;
+      // grid: cue court juste pour “entrer” dans la tâche (pas de cible affichée)
+      const gridCueMs = 700;
 
       if (phase === 'CUE' && ms >= gridCueMs){
         phase = 'TRACK';
         phaseEl.textContent = phase;
       }
-
       if (phase === 'CUE' || phase === 'TRACK'){
         stepGrid(dt);
       }
-
       if (phase === 'TRACK' && ms >= (gridCueMs + CONFIG.moveMs)){
         stopRun();
       }
@@ -818,26 +767,8 @@
   }
 
   // ========= Controls =========
-  function toggleRun(){
-    if (!running && (phase === 'READY' || phase === 'STOP' || phase === 'REVEAL')){
-      // start new run from READY
-      if (phase !== 'READY') { newTrial(); }
-      startRun();
-      return;
-    }
-    if (running){
-      // immediate stop
-      stopRun();
-      return;
-    }
-    if (!running && phase === 'STOP'){
-      reveal();
-      return;
-    }
-  }
-
   startBtn.addEventListener('click', () => {
-    if (phase === 'READY'){ startRun(); }
+    if (phase === 'READY') startRun();
     else { newTrial(); startRun(); }
   });
   overlayStart.addEventListener('click', () => startRun());
@@ -848,22 +779,20 @@
     else if (phase === 'STOP') reveal();
   });
 
-  // Keyboard
   document.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (e.code === 'Space'){
       e.preventDefault();
-      if (running){ stopRun(); }
-      else if (phase === 'STOP'){ reveal(); }
-      else if (phase === 'READY'){ startRun(); }
+      if (running) stopRun();
+      else if (phase === 'STOP') reveal();
+      else if (phase === 'READY') startRun();
       else { newTrial(); startRun(); }
     }
     if (k === 'm') drawer.classList.toggle('open');
-    if (k === 'n') { newTrial(); }
+    if (k === 'n') newTrial();
   });
 
-  // ===== Init =====
-  // In case of older Safari missing roundRect
+  // roundRect fallback
   if (!ctx.roundRect){
     CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
       r = Math.min(r, w/2, h/2);
@@ -878,21 +807,18 @@
     };
   }
 
-  modeSel.addEventListener('change', () => {
-    applyFromControls();
-    newTrial();
-  });
-
-  syncUI();
-  applyFromControls();
-  newTrial();
-
-  // Global error catch (pour éviter “plus rien” sans feedback)
+  // global errors
   window.addEventListener('error', (ev) => {
     setError(`Erreur JS détectée:\n${ev.message}\n${ev.filename}:${ev.lineno}`);
   });
 
-})().catch?.((e)=>{ /* ignore */ });
+  // Init
+  modeSel.addEventListener('change', () => { applyFromControls(); newTrial(); });
+  syncUI();
+  applyFromControls();
+  newTrial();
+
+})();
 </script>
 </body>
 </html>
