@@ -1034,18 +1034,18 @@
   });
 
   document.addEventListener('keydown', (e) => {
-    const k = e.key.toLowerCase();
-    if (e.code === 'Space'){
-      e.preventDefault();
-      const now = performance.now();
-      if (running) stopRun(now);
-      else if (phase === 'STOP') reveal(now);
-      else if (phase === 'READY') startRun();
-      else { newTrial(); startRun(); }
-    }
-    if (k === 'm') drawer.classList.toggle('open');
-    if (k === 'n') newTrial();
-  });
+  const k = (e.key || '').toLowerCase();
+  if (e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar'){
+    e.preventDefault();
+    const now = performance.now();
+    if (running) stopRun(now);
+    else if (phase === 'STOP') reveal(now);
+    else if (phase === 'READY') startRun();
+    else { newTrial(); startRun(); }
+  }
+  if (k === 'm') drawer.classList.toggle('open');
+  if (k === 'n') newTrial();
+});
 
   // roundRect fallback
   if (!ctx.roundRect){
