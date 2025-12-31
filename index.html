@@ -54,7 +54,7 @@
 
     #drawer{
       position: fixed; right: 12px; top: 64px;
-      width: 390px;
+      width: 410px;
       max-width: calc(100vw - 24px);
       background: var(--panel);
       border:1px solid var(--stroke);
@@ -100,6 +100,7 @@
     #mini b{ color:#fff; }
     #bar { height: 6px; background: rgba(255,255,255,.08); border:1px solid var(--stroke); border-radius: 999px; overflow:hidden; margin-top:8px; }
     #fill { height:100%; width:0%; background: var(--xamax-red); }
+
     .hint{ font-size:12px; color: var(--muted); margin-top:6px; line-height: 1.25; }
     kbd { background: rgba(255,255,255,.06); border:1px solid var(--stroke); padding:2px 6px; border-radius:8px; color:#fff; }
 
@@ -112,7 +113,7 @@
       padding: 18px;
     }
     #card{
-      width: 560px; max-width: calc(100vw - 36px);
+      width: 580px; max-width: calc(100vw - 36px);
       background: rgba(10,10,10,.86);
       border:1px solid var(--stroke);
       border-radius: 18px;
@@ -132,6 +133,20 @@
       color: #fff;
       font-size: 12px;
       white-space: pre-wrap;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      font-size: 12px;
+      color: var(--text);
+      margin-top: 8px;
+      flex-wrap:wrap;
     }
   </style>
 </head>
@@ -208,6 +223,61 @@
       </div>
     </div>
 
+    <!-- Fixation + Gamification -->
+    <div class="row">
+      <div class="rowline" style="margin-bottom:6px">
+        <div>
+          <div class="label">Croix centrale (périphérie)</div>
+          <div class="val"><span id="fixVal"></span></div>
+        </div>
+        <select id="fixation">
+          <option value="off" selected>Off</option>
+          <option value="on">On</option>
+        </select>
+      </div>
+
+      <div class="rowline">
+        <div>
+          <div class="label">Gamification (temps)</div>
+          <div class="val"><span id="gameVal"></span></div>
+        </div>
+        <select id="gamify">
+          <option value="off" selected>Off</option>
+          <option value="on">On</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Blink (occlusion) -->
+    <div class="row">
+      <div class="rowline" style="margin-bottom:6px">
+        <div>
+          <div class="label">Blink (occlusion)</div>
+          <div class="val"><span id="blinkVal"></span></div>
+        </div>
+        <select id="blinkMode">
+          <option value="off" selected>Off</option>
+          <option value="on">On</option>
+        </select>
+      </div>
+
+      <div class="rowline">
+        <div>
+          <div class="label">Nb blinks</div>
+          <div class="val"><span id="blinkCountVal"></span></div>
+        </div>
+        <input id="blinkCount" type="range" min="0" max="8" step="1" />
+      </div>
+
+      <div class="rowline" style="margin-top:10px">
+        <div>
+          <div class="label">Durée blink (ms)</div>
+          <div class="val"><span id="blinkDurVal"></span></div>
+        </div>
+        <input id="blinkDur" type="range" min="60" max="400" step="20" />
+      </div>
+    </div>
+
     <!-- Réglages tracker -->
     <div class="row" id="trackerBlock">
       <div class="rowline" style="margin-bottom:6px">
@@ -239,6 +309,14 @@
 
       <div class="rowline" style="margin-top:10px">
         <div>
+          <div class="label">Nb cibles (1–4)</div>
+          <div class="val"><span id="tVal"></span></div>
+        </div>
+        <input id="nTargets" type="range" min="1" max="4" step="1" />
+      </div>
+
+      <div class="rowline" style="margin-top:10px">
+        <div>
           <div class="label">Chaos</div>
           <div class="val"><span id="chaosVal"></span></div>
         </div>
@@ -261,8 +339,7 @@
       </div>
 
       <div class="hint" style="margin-top:10px">
-        Mode “chaos pur” : lettres + chiffres de couleurs aléatoires qui bougent.
-        Pas de cible affichée dans ce mode.
+        Mode “chaos pur” : lettres + chiffres de couleurs aléatoires qui bougent. Pas de cible affichée.
       </div>
     </div>
 
@@ -278,6 +355,15 @@
       <div>Essais: <b id="trials">0</b></div>
       <div>Temps: <b id="time">0.00</b>s</div>
     </div>
+
+    <div class="pill" id="scorePill" style="display:none;">
+      <span>RT:</span> <b id="rtLast">—</b>
+      <span style="opacity:.6">|</span>
+      <span>Best:</span> <b id="rtBest">—</b>
+      <span style="opacity:.6">|</span>
+      <span>Moy:</span> <b id="rtAvg">—</b>
+    </div>
+
     <div id="bar"><div id="fill"></div></div>
   </div>
 
@@ -297,7 +383,7 @@
 <script>
 (() => {
   // ===== Logo (optionnel) =====
-  const LOGO_PATH = "xamaxlogo.png"; // met "" si tu veux le cacher
+  const LOGO_PATH = "xamaxlogo.png"; // mets "" si tu veux le cacher
   const logoEl = document.getElementById('logo');
   logoEl.onerror = () => { logoEl.style.display = "none"; };
   if (LOGO_PATH) logoEl.src = LOGO_PATH; else logoEl.style.display = "none";
@@ -305,7 +391,7 @@
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
 
-  // UI
+  // UI base
   const subtitleEl = document.getElementById('subtitle');
   const toggleBtn = document.getElementById('toggleBtn');
   const drawer = document.getElementById('drawer');
@@ -334,6 +420,20 @@
   const moveValEl  = document.getElementById('moveVal');
   const sizeValEl  = document.getElementById('sizeVal');
 
+  // Fixation + gamify
+  const fixationSel = document.getElementById('fixation');
+  const fixValEl = document.getElementById('fixVal');
+  const gamifySel = document.getElementById('gamify');
+  const gameValEl = document.getElementById('gameVal');
+
+  // Blink
+  const blinkModeSel = document.getElementById('blinkMode');
+  const blinkValEl = document.getElementById('blinkVal');
+  const blinkCountSlider = document.getElementById('blinkCount');
+  const blinkCountValEl = document.getElementById('blinkCountVal');
+  const blinkDurSlider = document.getElementById('blinkDur');
+  const blinkDurValEl = document.getElementById('blinkDurVal');
+
   // Tracker controls
   const trackerBlock = document.getElementById('trackerBlock');
   const stimulusSel = document.getElementById('stimulus');
@@ -342,6 +442,8 @@
   const cueValEl  = document.getElementById('cueVal');
   const nSlider   = document.getElementById('nDots');
   const nValEl    = document.getElementById('nVal');
+  const tSlider   = document.getElementById('nTargets');
+  const tValEl    = document.getElementById('tVal');
   const chaosSlider = document.getElementById('chaos');
   const chaosValEl  = document.getElementById('chaosVal');
 
@@ -350,6 +452,12 @@
   const gridSizeSel = document.getElementById('gridSize');
   const gridValEl = document.getElementById('gridVal');
 
+  // Score UI
+  const scorePill = document.getElementById('scorePill');
+  const rtLastEl = document.getElementById('rtLast');
+  const rtBestEl = document.getElementById('rtBest');
+  const rtAvgEl  = document.getElementById('rtAvg');
+
   // ===== Config =====
   const CONFIG = {
     mode: 'tracker',     // tracker | grid
@@ -357,10 +465,19 @@
     moveMs: 7000,
     size: 18,
 
+    fixation: 'off',     // off | on
+    gamify: 'off',       // off | on
+
+    // blink
+    blinkMode: 'off',    // off | on
+    blinkCount: 2,
+    blinkDurMs: 140,
+
     // tracker
     stimulus: 'color',   // color | number
     showTargetMs: 900,
     nDots: 10,
+    nTargets: 1,
     chaos: 0.35,
 
     // grid
@@ -377,22 +494,32 @@
 
   // tracker state
   let dots = [];
-  let targetId = 0;
+  let targetIds = [];
 
   // grid state
   let grid = []; // {x,y,vx,vy,text,color}
 
+  // blink state
+  let blinkTimes = [];  // in ms since t0
+  let blinkActive = false;
+
+  // gamify state
+  let stopAt = null;     // timestamp (performance.now()) when STOP happens
+  let rtLast = null;
+  let rtBest = null;
+  let rtSum = 0;
+  let rtCount = 0;
+
   // Colors
   const BG = '#0b0b0b';
   const DOT = '#e6e6e6';
-  const TARGET_CUE = '#e10600'; // rouge xamax
+  const TARGET_CUE = '#e10600'; // Xamax red
   const REVEAL_OK = '#34c759';
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
   function randomBrightColor(){
-    // couleurs vives mais lisibles sur fond noir
     const h = (Math.random()*360)|0;
     const s = 85;
     const l = 60;
@@ -402,6 +529,23 @@
   function setError(msg){
     errBox.style.display = "block";
     errBox.textContent = msg;
+  }
+
+  function fmtMs(ms){
+    if (ms == null) return '—';
+    return `${Math.round(ms)} ms`;
+  }
+
+  function updateScoreUI(){
+    if (CONFIG.gamify !== 'on'){
+      scorePill.style.display = 'none';
+      return;
+    }
+    scorePill.style.display = 'inline-flex';
+    rtLastEl.textContent = fmtMs(rtLast);
+    rtBestEl.textContent = fmtMs(rtBest);
+    const avg = (rtCount > 0) ? (rtSum / rtCount) : null;
+    rtAvgEl.textContent = fmtMs(avg);
   }
 
   // ========= UI sync =========
@@ -418,12 +562,27 @@
     moveValEl.textContent  = (CONFIG.moveMs/1000).toFixed(0);
     sizeValEl.textContent  = CONFIG.size;
 
+    fixationSel.value = CONFIG.fixation;
+    fixValEl.textContent = (CONFIG.fixation === 'on') ? 'On' : 'Off';
+
+    gamifySel.value = CONFIG.gamify;
+    gameValEl.textContent = (CONFIG.gamify === 'on') ? 'On' : 'Off';
+
+    blinkModeSel.value = CONFIG.blinkMode;
+    blinkValEl.textContent = (CONFIG.blinkMode === 'on') ? 'On' : 'Off';
+    blinkCountSlider.value = CONFIG.blinkCount;
+    blinkCountValEl.textContent = CONFIG.blinkCount;
+    blinkDurSlider.value = CONFIG.blinkDurMs;
+    blinkDurValEl.textContent = CONFIG.blinkDurMs;
+
     stimulusSel.value = CONFIG.stimulus;
     stimValEl.textContent = CONFIG.stimulus === 'color' ? 'Couleur' : 'Numéros';
     cueSlider.value = CONFIG.showTargetMs;
     cueValEl.textContent = CONFIG.showTargetMs;
     nSlider.value = CONFIG.nDots;
     nValEl.textContent = CONFIG.nDots;
+    tSlider.value = CONFIG.nTargets;
+    tValEl.textContent = CONFIG.nTargets;
     chaosSlider.value = CONFIG.chaos;
     chaosValEl.textContent = CONFIG.chaos.toFixed(2);
 
@@ -436,6 +595,8 @@
     subtitleEl.textContent = running
       ? (phase === 'STOP' ? 'STOP → ESPACE révèle' : 'En cours')
       : 'Stop & Go • Mode au choix';
+
+    updateScoreUI();
   }
 
   function applyFromControls(){
@@ -444,9 +605,17 @@
     CONFIG.moveMs = parseInt(moveSlider.value, 10) * 1000;
     CONFIG.size = parseInt(sizeSlider.value, 10);
 
+    CONFIG.fixation = fixationSel.value;
+    CONFIG.gamify = gamifySel.value;
+
+    CONFIG.blinkMode = blinkModeSel.value;
+    CONFIG.blinkCount = parseInt(blinkCountSlider.value, 10);
+    CONFIG.blinkDurMs = parseInt(blinkDurSlider.value, 10);
+
     CONFIG.stimulus = stimulusSel.value;
     CONFIG.showTargetMs = parseInt(cueSlider.value, 10);
     CONFIG.nDots = parseInt(nSlider.value, 10);
+    CONFIG.nTargets = parseInt(tSlider.value, 10);
     CONFIG.chaos = parseFloat(chaosSlider.value);
 
     CONFIG.gridN = parseInt(gridSizeSel.value, 10);
@@ -454,15 +623,20 @@
     syncUI();
   }
 
-  [modeSel, speedSlider, moveSlider, sizeSlider, stimulusSel, cueSlider, nSlider, chaosSlider, gridSizeSel]
-    .forEach(el => el.addEventListener('input', applyFromControls));
+  [
+    modeSel, speedSlider, moveSlider, sizeSlider,
+    fixationSel, gamifySel,
+    blinkModeSel, blinkCountSlider, blinkDurSlider,
+    stimulusSel, cueSlider, nSlider, tSlider, chaosSlider,
+    gridSizeSel
+  ].forEach(el => el.addEventListener('input', applyFromControls));
 
   toggleBtn.addEventListener('click', () => drawer.classList.toggle('open'));
 
   // ========= Resize =========
   function resizeToFit(){
     const topOffset = 84;
-    const bottomOffset = 88;
+    const bottomOffset = 110;
     const sideOffset = 24;
 
     const maxW = window.innerWidth - sideOffset;
@@ -495,11 +669,18 @@
         label: String(i+1)
       });
     }
-    targetId = Math.floor(rand(0, CONFIG.nDots));
+
+    // Choose nTargets unique targets
+    const pool = [...Array(CONFIG.nDots).keys()];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    targetIds = pool.slice(0, Math.min(CONFIG.nTargets, CONFIG.nDots));
   }
 
   function pickChaosTexts(n){
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans I/O
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ";
     const out = [];
     for (let i=0;i<n;i++){
       const chooseNumber = Math.random() < 0.5;
@@ -529,7 +710,7 @@
         const x0 = pad + c*cellW + cellW/2;
         const y0 = pad + r*cellH + cellH/2;
         const angle = rand(0, Math.PI*2);
-        const sp = rand(CONFIG.speed*0.15, CONFIG.speed*0.40); // plus lent que tracker
+        const sp = rand(CONFIG.speed*0.15, CONFIG.speed*0.40);
         grid.push({
           x:x0, y:y0,
           vx: Math.cos(angle)*sp,
@@ -540,6 +721,26 @@
         k++;
       }
     }
+  }
+
+  function scheduleBlinks(){
+    blinkTimes = [];
+    blinkActive = false;
+
+    if (CONFIG.blinkMode !== 'on' || CONFIG.blinkCount <= 0) return;
+
+    const cueMs = (CONFIG.mode === 'tracker') ? CONFIG.showTargetMs : 700;
+    const totalMs = cueMs + CONFIG.moveMs;
+
+    for (let i = 0; i < CONFIG.blinkCount; i++) {
+      const t = (0.20 + Math.random() * 0.70) * totalMs;
+      blinkTimes.push(t);
+    }
+    blinkTimes.sort((a,b)=>a-b);
+  }
+
+  function resetGamifyTrial(){
+    stopAt = null;
   }
 
   function newTrial(){
@@ -553,6 +754,8 @@
     fillEl.style.width = '0%';
     timeEl.textContent = '0.00';
     overlay.style.display = 'flex';
+
+    resetGamifyTrial();
 
     if (CONFIG.mode === 'tracker') buildTracker();
     else buildGrid();
@@ -570,20 +773,37 @@
     phase = 'CUE';
     phaseEl.textContent = phase;
 
+    scheduleBlinks();
+    resetGamifyTrial();
+
     requestAnimationFrame(loop);
     syncUI();
   }
 
-  function stopRun(){
+  function stopRun(now){
     running = false;
     phase = 'STOP';
     phaseEl.textContent = phase;
+
+    // start RT timer at STOP
+    stopAt = now ?? performance.now();
+
     syncUI();
   }
 
-  function reveal(){
+  function reveal(now){
     phase = 'REVEAL';
     phaseEl.textContent = phase;
+
+    // record RT: time from STOP to reveal keypress/click
+    if (CONFIG.gamify === 'on' && stopAt != null){
+      const rt = (now ?? performance.now()) - stopAt;
+      rtLast = rt;
+      rtBest = (rtBest == null) ? rt : Math.min(rtBest, rt);
+      rtSum += rt;
+      rtCount += 1;
+    }
+    updateScoreUI();
     syncUI();
   }
 
@@ -622,13 +842,48 @@
     }
   }
 
+  function computeBlink(ms){
+    blinkActive = false;
+    if (CONFIG.blinkMode !== 'on' || blinkTimes.length === 0) return;
+    for (const tb of blinkTimes) {
+      if (ms >= tb && ms <= tb + CONFIG.blinkDurMs) {
+        blinkActive = true;
+        break;
+      }
+    }
+  }
+
+  function drawFixationCross(){
+    if (CONFIG.fixation !== 'on') return;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const s = Math.max(10, Math.floor(CONFIG.size * 1.1));
+    ctx.save();
+    ctx.globalAlpha = 0.78;
+    ctx.strokeStyle = 'rgba(255,255,255,.88)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s, cy);
+    ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy + s);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBlink(){
+    if (!blinkActive || !running) return;
+    if (phase !== 'CUE' && phase !== 'TRACK') return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.92)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
   function draw(now){
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle = BG;
     ctx.fillRect(0,0,W,H);
 
-    // temps + barre (jusqu’au stop auto)
     if (running){
       const elapsed = (now - t0) / 1000;
       timeEl.textContent = elapsed.toFixed(2);
@@ -639,7 +894,7 @@
       fillEl.style.width = (p*100).toFixed(1)+'%';
     }
 
-    // instructions in-canvas
+    // Info in-canvas
     ctx.fillStyle = 'rgba(255,255,255,.85)';
     ctx.font = '22px system-ui, -apple-system, Segoe UI, Roboto';
     if (!running && phase === 'READY'){
@@ -652,9 +907,12 @@
       ctx.fillText('RÉVÉLATION', 24, 44);
     }
 
-    // render game
     if (CONFIG.mode === 'tracker') drawTracker();
     else drawGrid();
+
+    // Overlay constraints
+    drawFixationCross();
+    drawBlink();
   }
 
   function drawTracker(){
@@ -664,15 +922,15 @@
     for (const d of dots){
       let color = DOT;
 
-      // Cible
-      if (showCue && d.id === targetId){
+      // Cue marking (color stimulus only)
+      if (showCue && targetIds.includes(d.id)){
         if (CONFIG.stimulus === 'color') color = TARGET_CUE;
       }
-      if (phase === 'REVEAL' && d.id === targetId){
+      // Reveal targets (all targetIds)
+      if (phase === 'REVEAL' && targetIds.includes(d.id)){
         color = REVEAL_OK;
       }
 
-      // boule
       ctx.beginPath();
       ctx.arc(d.x, d.y, CONFIG.size, 0, Math.PI*2);
       ctx.fillStyle = color;
@@ -681,7 +939,6 @@
       ctx.strokeStyle = '#111';
       ctx.stroke();
 
-      // numéros (cue uniquement)
       if (showNumbers){
         ctx.fillStyle = '#111';
         ctx.font = `${Math.max(12, CONFIG.size)}px system-ui, -apple-system, Segoe UI, Roboto`;
@@ -691,24 +948,22 @@
       }
     }
 
-    // micro texte
+    // bottom hint
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = 'rgba(255,255,255,.70)';
     ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto';
 
     if (phase === 'CUE'){
-      if (CONFIG.stimulus === 'color') ctx.fillText('Cible rouge (mémorise)', 24, canvas.height-24);
-      else ctx.fillText('Mémorise le numéro de la cible', 24, canvas.height-24);
+      if (CONFIG.stimulus === 'color') ctx.fillText('Mémorise les cibles rouges', 24, canvas.height-24);
+      else ctx.fillText('Mémorise les numéros des cibles', 24, canvas.height-24);
     } else if (phase === 'TRACK'){
-      ctx.fillText('Tout identique — tracking', 24, canvas.height-24);
+      ctx.fillText('Tracking — tout identique', 24, canvas.height-24);
     }
   }
 
   function drawGrid(){
-    // “chaos pur”: pas de cible, juste lettres/chiffres colorés qui bougent
     for (const cell of grid){
-      // petit fond discret (peut être supprimé si tu veux 100% texte)
       ctx.beginPath();
       ctx.roundRect(cell.x - (CONFIG.size*2.0), cell.y - (CONFIG.size*1.25), CONFIG.size*4.0, CONFIG.size*2.5, 14);
       ctx.fillStyle = 'rgba(255,255,255,.05)';
@@ -717,7 +972,6 @@
       ctx.strokeStyle = 'rgba(255,255,255,.08)';
       ctx.stroke();
 
-      // texte coloré
       ctx.fillStyle = cell.color;
       ctx.font = `${Math.max(14, CONFIG.size)}px system-ui, -apple-system, Segoe UI, Roboto`;
       ctx.textAlign = 'center';
@@ -735,6 +989,8 @@
     last = now;
     const ms = now - t0;
 
+    computeBlink(ms);
+
     if (CONFIG.mode === 'tracker'){
       if (phase === 'CUE' && ms >= CONFIG.showTargetMs){
         phase = 'TRACK';
@@ -744,12 +1000,10 @@
         stepTracker(dt);
       }
       if (phase === 'TRACK' && ms >= (CONFIG.showTargetMs + CONFIG.moveMs)){
-        stopRun();
+        stopRun(now);
       }
     } else {
-      // grid: cue court juste pour “entrer” dans la tâche (pas de cible affichée)
       const gridCueMs = 700;
-
       if (phase === 'CUE' && ms >= gridCueMs){
         phase = 'TRACK';
         phaseEl.textContent = phase;
@@ -758,7 +1012,7 @@
         stepGrid(dt);
       }
       if (phase === 'TRACK' && ms >= (gridCueMs + CONFIG.moveMs)){
-        stopRun();
+        stopRun(now);
       }
     }
 
@@ -775,16 +1029,17 @@
   overlayMenu.addEventListener('click', () => drawer.classList.add('open'));
 
   stopBtn.addEventListener('click', () => {
-    if (running) stopRun();
-    else if (phase === 'STOP') reveal();
+    if (running) stopRun(performance.now());
+    else if (phase === 'STOP') reveal(performance.now());
   });
 
   document.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (e.code === 'Space'){
       e.preventDefault();
-      if (running) stopRun();
-      else if (phase === 'STOP') reveal();
+      const now = performance.now();
+      if (running) stopRun(now);
+      else if (phase === 'STOP') reveal(now);
       else if (phase === 'READY') startRun();
       else { newTrial(); startRun(); }
     }
@@ -807,17 +1062,16 @@
     };
   }
 
-  // global errors
   window.addEventListener('error', (ev) => {
     setError(`Erreur JS détectée:\n${ev.message}\n${ev.filename}:${ev.lineno}`);
   });
 
-  // Init
   modeSel.addEventListener('change', () => { applyFromControls(); newTrial(); });
+
+  // Init
   syncUI();
   applyFromControls();
   newTrial();
-
 })();
 </script>
 </body>
