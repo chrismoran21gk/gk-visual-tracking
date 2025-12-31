@@ -1033,6 +1033,26 @@
     else if (phase === 'STOP') reveal(performance.now());
   });
 
+// Tap/click sur la zone de jeu = même logique que ESPACE (iPad friendly)
+function handleAction(now){
+  if (running) stopRun(now);
+  else if (phase === 'STOP') reveal(now);
+  else if (phase === 'READY') startRun();
+  else { newTrial(); startRun(); }
+}
+
+// Click souris
+canvas.addEventListener('click', (e) => {
+  e.preventDefault();
+  handleAction(performance.now());
+});
+
+// Touch (iPad) — on bloque le scroll/double-tap
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  handleAction(performance.now());
+}, { passive: false });
+  
   document.addEventListener('keydown', (e) => {
   const k = (e.key || '').toLowerCase();
   if (e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar'){
