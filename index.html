@@ -16,7 +16,7 @@
     html, body { margin:0; height:100%; background:#070707; font-family: system-ui, -apple-system, Segoe UI, Roboto; color:var(--text); }
     body{ overflow:hidden; }
 
-    /* ✅ Canvas plein écran sur toutes les machines */
+    /* Canvas plein écran */
     canvas{
       position: fixed;
       inset: 0;
@@ -28,6 +28,9 @@
       touch-action: none;
       display:block;
     }
+
+    /* ✅ HUD cachable pendant le run */
+    .hiddenDuringRun{ display:none !important; }
 
     #topbar{
       position: fixed; left: 12px; right:12px; top: 12px;
@@ -243,7 +246,6 @@
       </div>
     </div>
 
-    <!-- Tracker -->
     <div class="row" id="trackerBlock">
       <div class="rowline" style="margin-bottom:6px">
         <div>
@@ -293,7 +295,6 @@
       </div>
     </div>
 
-    <!-- Grid -->
     <div class="row" id="gridBlock" style="display:none">
       <div class="rowline">
         <div>
@@ -323,7 +324,6 @@
       </div>
     </div>
 
-    <!-- Colors -->
     <div class="row" id="colorsBlock" style="display:none">
       <div class="rowline">
         <div>
@@ -349,15 +349,6 @@
       <div>Essais: <b id="trials">0</b></div>
       <div>Temps: <b id="time">0.00</b>s</div>
     </div>
-
-    <div class="pill" id="scorePill" style="display:none;">
-      <span>RT:</span> <b id="rtLast">—</b>
-      <span style="opacity:.6">|</span>
-      <span>Best:</span> <b id="rtBest">—</b>
-      <span style="opacity:.6">|</span>
-      <span>Moy:</span> <b id="rtAvg">—</b>
-    </div>
-
     <div id="bar"><div id="fill"></div></div>
   </div>
 
@@ -375,7 +366,6 @@
 
 <script>
 (() => {
-  // Logo optionnel
   const LOGO_PATH = "xamaxlogo.png";
   const logoEl = document.getElementById('logo');
   logoEl.onerror = () => { logoEl.style.display = "none"; };
@@ -383,6 +373,9 @@
 
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d', { alpha: false });
+
+  const topbar = document.getElementById('topbar');
+  const mini = document.getElementById('mini');
 
   const subtitleEl = document.getElementById('subtitle');
   const toggleBtn = document.getElementById('toggleBtn');
@@ -440,11 +433,6 @@
   const colorIntervalSlider = document.getElementById('colorInterval');
   const colIntValEl = document.getElementById('colIntVal');
 
-  const scorePill = document.getElementById('scorePill');
-  const rtLastEl = document.getElementById('rtLast');
-  const rtBestEl = document.getElementById('rtBest');
-  const rtAvgEl  = document.getElementById('rtAvg');
-
   const CONFIG = {
     mode: 'tracker',
     speed: 260,
@@ -462,11 +450,11 @@
     gridN: 5,
     gridColorMode: 'multi',
 
-    colorIntervalMs: 300, // ✅ mini-jeu couleurs (infinite)
+    colorIntervalMs: 300,
   };
 
   let running = false;
-  let phase = 'READY'; // READY | CUE | TRACK | STOP | REVEAL
+  let phase = 'READY';
   let trials = 0;
   let t0 = 0;
   let last = 0;
@@ -477,18 +465,10 @@
 
   let lastActionAt = 0;
 
-  // gamify
-  let stopAt = null;
-  let rtLast = null;
-  let rtBest = null;
-  let rtSum = 0;
-  let rtCount = 0;
-
   const DOT = '#e6e6e6';
   const TARGET_CUE = '#e10600';
   const REVEAL_RING = '#34c759';
 
-  // ✅ Couleurs mini-jeu 3
   const COLOR_SET = [
     { name:'Blanc', value:'#FFFFFF' },
     { name:'Bleu',  value:'#1E90FF' },
@@ -499,38 +479,29 @@
   let currentColorName = COLOR_SET[0].name;
   let lastColorChangeAt = 0;
 
-  function rand(min, max) { return Math.random() * (max - min) + min; }
-  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-
-  function randomBrightColor(){
-    const h = (Math.random()*360)|0;
-    return `hsl(${h} 85% 60%)`;
-  }
-
   function setError(msg){
     errBox.style.display = "block";
     errBox.textContent = msg;
   }
 
-  function fmtMs(ms){
-    if (ms == null) return '—';
-    return `${Math.round(ms)} ms`;
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function randomBrightColor(){
+    const h = (Math.random()*360)|0;
+    return `hsl(${h} 85% 60%)`;
   }
 
-  function updateScoreUI(){
-    if (CONFIG.gamify !== 'on'){
-      scorePill.style.display = 'none';
-      return;
-    }
-    scorePill.style.display = 'inline-flex';
-    rtLastEl.textContent = fmtMs(rtLast);
-    rtBestEl.textContent = fmtMs(rtBest);
-    const avg = (rtCount > 0) ? (rtSum / rtCount) : null;
-    rtAvgEl.textContent = fmtMs(avg);
+  /* ✅ cache/affiche HUD pendant le run pour éviter l’occlusion */
+  function setHUDVisible(visible){
+    const hide = !visible;
+    topbar.classList.toggle('hiddenDuringRun', hide);
+    mini.classList.toggle('hiddenDuringRun', hide);
+
+    // Optionnel: on ferme le drawer pour pas qu'il reste ouvert
+    if (!visible) drawer.classList.remove('open');
   }
 
   function updateActionButtons(){
-    // Reveal seulement pour tracker/grid (pas pour colors)
     const allowReveal = (CONFIG.mode !== 'colors');
     revealBtn.style.display = (allowReveal && !running && phase === 'STOP') ? 'inline-flex' : 'none';
   }
@@ -581,14 +552,12 @@
     gridBlock.style.display = (CONFIG.mode === 'grid') ? 'block' : 'none';
     colorsBlock.style.display = (CONFIG.mode === 'colors') ? 'block' : 'none';
 
-    // Subtitle logique
     if (CONFIG.mode === 'colors'){
       subtitleEl.textContent = running ? 'Couleurs: en cours (tap/clic = Stop)' : 'Couleurs: tap/clic = Start/Stop';
     } else {
       subtitleEl.textContent = running ? 'En cours (tap/clic = Stop)' : 'Tap/clic = Start • Stop • Reveal';
     }
 
-    updateScoreUI();
     updateActionButtons();
   }
 
@@ -626,15 +595,12 @@
 
   toggleBtn.addEventListener('click', () => drawer.classList.toggle('open'));
 
-  // ✅ Canvas vrai plein écran (pixels réels + DPI)
   function resizeCanvas(){
     const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-    const w = Math.floor(window.innerWidth * dpr);
-    const h = Math.floor(window.innerHeight * dpr);
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
     ctx.setTransform(1,0,0,1,0,0);
-    ctx.scale(dpr, dpr); // on dessine en "CSS pixels"
+    ctx.scale(dpr, dpr);
     draw(performance.now());
   }
   window.addEventListener('resize', resizeCanvas);
@@ -646,14 +612,8 @@
     for (let i=0;i<CONFIG.nDots;i++){
       const angle = rand(0, Math.PI*2);
       const sp = rand(CONFIG.speed*0.75, CONFIG.speed*1.25);
-      dots.push({
-        id:i,
-        x: rand(CONFIG.size, W-CONFIG.size),
-        y: rand(CONFIG.size, H-CONFIG.size),
-        vx: Math.cos(angle)*sp,
-        vy: Math.sin(angle)*sp,
-        label: String(i+1)
-      });
+      dots.push({ id:i, x: rand(CONFIG.size, W-CONFIG.size), y: rand(CONFIG.size, H-CONFIG.size),
+        vx: Math.cos(angle)*sp, vy: Math.sin(angle)*sp, label: String(i+1) });
     }
     const pool = [...Array(CONFIG.nDots).keys()];
     for (let i = pool.length - 1; i > 0; i--) {
@@ -695,20 +655,11 @@
         const y0 = pad + r*cellH + cellH/2;
         const angle = rand(0, Math.PI*2);
         const sp = rand(CONFIG.speed*0.15, CONFIG.speed*0.40);
-        grid.push({
-          x:x0, y:y0,
-          vx: Math.cos(angle)*sp,
-          vy: Math.sin(angle)*sp,
-          text: texts[k],
-          color: (CONFIG.gridColorMode === 'mono') ? monoColor : randomBrightColor()
-        });
+        grid.push({ x:x0, y:y0, vx: Math.cos(angle)*sp, vy: Math.sin(angle)*sp,
+          text: texts[k], color: (CONFIG.gridColorMode === 'mono') ? monoColor : randomBrightColor() });
         k++;
       }
     }
-  }
-
-  function resetGamifyTrial(){
-    stopAt = null;
   }
 
   function newTrial(){
@@ -721,14 +672,15 @@
     phaseEl.textContent = phase;
     fillEl.style.width = '0%';
     timeEl.textContent = '0.00';
-    overlay.style.display = 'flex';
 
-    resetGamifyTrial();
+    // ✅ HUD visible tant qu'on n'a pas démarré
+    setHUDVisible(true);
+
+    overlay.style.display = 'flex';
 
     if (CONFIG.mode === 'tracker') buildTracker();
     else if (CONFIG.mode === 'grid') buildGrid();
     else {
-      // colors
       const pick = COLOR_SET[(Math.random()*COLOR_SET.length)|0];
       currentColor = pick.value;
       currentColorName = pick.name;
@@ -744,13 +696,17 @@
     running = true;
     t0 = performance.now();
     last = t0;
+
+    // ✅ HUD caché dès qu’on lance un run (tracker+grille)
+    // (pour colors, on peut aussi cacher, mais tu peux changer si tu veux)
+    if (CONFIG.mode !== 'colors') setHUDVisible(false);
+    else setHUDVisible(false);
+
     phase = (CONFIG.mode === 'colors') ? 'TRACK' : 'CUE';
     phaseEl.textContent = phase;
-    resetGamifyTrial();
 
     if (CONFIG.mode === 'colors'){
       lastColorChangeAt = t0;
-      // on force une première couleur aléatoire au start
       const pick = COLOR_SET[(Math.random()*COLOR_SET.length)|0];
       currentColor = pick.value;
       currentColorName = pick.name;
@@ -764,7 +720,10 @@
     running = false;
     phase = 'STOP';
     phaseEl.textContent = phase;
-    stopAt = now ?? performance.now();
+
+    // ✅ HUD ré-apparaît au STOP pour pouvoir faire Reveal / changer options
+    setHUDVisible(true);
+
     syncUI();
     draw(performance.now());
   }
@@ -773,14 +732,9 @@
     phase = 'REVEAL';
     phaseEl.textContent = phase;
 
-    if (CONFIG.gamify === 'on' && stopAt != null){
-      const rt = (now ?? performance.now()) - stopAt;
-      rtLast = rt;
-      rtBest = (rtBest == null) ? rt : Math.min(rtBest, rt);
-      rtSum += rt;
-      rtCount += 1;
-    }
-    updateScoreUI();
+    // HUD visible pendant reveal
+    setHUDVisible(true);
+
     syncUI();
     draw(performance.now());
   }
@@ -794,15 +748,12 @@
   function handleAction(now){
     if (running) { stopRun(now); return; }
 
-    // mode colors : Start/Stop en boucle, pas de reveal
     if (CONFIG.mode === 'colors'){
       if (phase === 'STOP' || phase === 'READY') { startRun(); return; }
       if (phase === 'REVEAL') { newTrial(); return; }
-      newTrial();
-      return;
+      newTrial(); return;
     }
 
-    // tracker/grid classique
     if (phase === 'STOP') { reveal(now); return; }
     if (phase === 'REVEAL') { newTrial(); return; }
     if (phase === 'READY') { startRun(); return; }
@@ -814,15 +765,11 @@
     for (const d of dots){
       d.vx += rand(-1,1)*CONFIG.chaos*60;
       d.vy += rand(-1,1)*CONFIG.chaos*60;
-
       const sp = Math.hypot(d.vx,d.vy) || 1;
       const desired = CONFIG.speed;
       d.vx = (d.vx/sp)*(desired + rand(-20,20));
       d.vy = (d.vy/sp)*(desired + rand(-20,20));
-
-      d.x += d.vx*dt;
-      d.y += d.vy*dt;
-
+      d.x += d.vx*dt; d.y += d.vy*dt;
       if (d.x < CONFIG.size) { d.x = CONFIG.size; d.vx *= -1; }
       if (d.x > W-CONFIG.size) { d.x = W-CONFIG.size; d.vx *= -1; }
       if (d.y < CONFIG.size) { d.y = CONFIG.size; d.vy *= -1; }
@@ -834,9 +781,7 @@
     const W = window.innerWidth, H = window.innerHeight;
     const pad = 28;
     for (const cell of grid){
-      cell.x += cell.vx*dt;
-      cell.y += cell.vy*dt;
-
+      cell.x += cell.vx*dt; cell.y += cell.vy*dt;
       if (cell.x < pad) { cell.x = pad; cell.vx *= -1; }
       if (cell.x > W-pad) { cell.x = W-pad; cell.vx *= -1; }
       if (cell.y < pad) { cell.y = pad; cell.vy *= -1; }
@@ -863,33 +808,15 @@
   function draw(now){
     const W = window.innerWidth, H = window.innerHeight;
 
-    // Mode 3: plein écran couleurs
     if (CONFIG.mode === 'colors'){
       ctx.fillStyle = currentColor;
       ctx.fillRect(0,0,W,H);
-
-      // petite info discrète
-      ctx.fillStyle = 'rgba(0,0,0,.55)';
-      ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto';
-      ctx.fillText(`Couleur: ${currentColorName}`, 18, H - 22);
-
       drawFixationCross();
       return;
     }
 
-    // Tracker/grid classiques
     ctx.fillStyle = '#0b0b0b';
     ctx.fillRect(0,0,W,H);
-
-    if (running){
-      const elapsed = (now - t0) / 1000;
-      timeEl.textContent = elapsed.toFixed(2);
-
-      const cueMs = (CONFIG.mode === 'tracker') ? CONFIG.preMoveMs : 700;
-      const totalMsToStop = cueMs + CONFIG.moveMs;
-      const p = clamp((now - t0) / totalMsToStop, 0, 1);
-      fillEl.style.width = (p*100).toFixed(1)+'%';
-    }
 
     ctx.fillStyle = 'rgba(255,255,255,.85)';
     ctx.font = '22px system-ui, -apple-system, Segoe UI, Roboto';
@@ -906,17 +833,11 @@
 
   function drawTracker(){
     const showCue = (phase === 'CUE');
-
     for (const d of dots){
       let color = DOT;
       const isTarget = targetIds.includes(d.id);
-
-      if (showCue && isTarget && CONFIG.stimulus === 'color'){
-        color = TARGET_CUE;
-      }
-      if (phase === 'REVEAL' && isTarget){
-        color = TARGET_CUE;
-      }
+      if (showCue && isTarget && CONFIG.stimulus === 'color') color = TARGET_CUE;
+      if (phase === 'REVEAL' && isTarget) color = TARGET_CUE;
 
       ctx.beginPath();
       ctx.arc(d.x, d.y, CONFIG.size, 0, Math.PI*2);
@@ -938,39 +859,31 @@
         ctx.textBaseline = 'middle';
         const fs = Math.max(14, Math.floor(CONFIG.size * 1.15));
         ctx.font = `800 ${fs}px system-ui, -apple-system, Segoe UI, Roboto`;
-
         ctx.lineWidth = 4;
         ctx.strokeStyle = 'rgba(255,255,255,.85)';
         ctx.strokeText(d.label, d.x, d.y+1);
-
         ctx.fillStyle = '#111';
         ctx.fillText(d.label, d.x, d.y+1);
         ctx.restore();
       }
     }
+  }
 
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = 'rgba(255,255,255,.70)';
-    ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto';
-
-    if (phase === 'CUE'){
-      if (CONFIG.stimulus === 'color') ctx.fillText('Mémorise les cibles rouges (stable)', 24, window.innerHeight-24);
-      else ctx.fillText('Mémorise les numéros des cibles (stable)', 24, window.innerHeight-24);
-    } else if (phase === 'TRACK'){
-      ctx.fillText('Tracking — mouvement', 24, window.innerHeight-24);
-    } else if (phase === 'REVEAL'){
-      ctx.fillText('Cibles = rouge + contour vert', 24, window.innerHeight-24);
-    }
+  function roundRect(c, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y, x+w, y+h, r);
+    c.arcTo(x+w, y+h, x, y+h, r);
+    c.arcTo(x, y+h, x, y, r);
+    c.arcTo(x, y, x+w, y, r);
+    c.closePath();
   }
 
   function drawGrid(){
     for (const cell of grid){
       const w = CONFIG.size*4.0;
       const h = CONFIG.size*2.5;
-
-      // roundRect simple (compatible)
-      ctx.beginPath();
       roundRect(ctx, cell.x - w/2, cell.y - h/2, w, h, 14);
       ctx.fillStyle = 'rgba(255,255,255,.05)';
       ctx.fill();
@@ -988,16 +901,6 @@
     ctx.textBaseline = 'alphabetic';
   }
 
-  function roundRect(c, x, y, w, h, r){
-    r = Math.min(r, w/2, h/2);
-    c.moveTo(x+r, y);
-    c.arcTo(x+w, y, x+w, y+h, r);
-    c.arcTo(x+w, y+h, x, y+h, r);
-    c.arcTo(x, y+h, x, y, r);
-    c.arcTo(x, y, x+w, y, r);
-    c.closePath();
-  }
-
   function loop(now){
     if (!running) { draw(now); return; }
 
@@ -1010,12 +913,8 @@
         phase = 'TRACK';
         phaseEl.textContent = phase;
       }
-      if (phase === 'TRACK'){
-        stepTracker(dt);
-      }
-      if (phase === 'TRACK' && ms >= (CONFIG.preMoveMs + CONFIG.moveMs)){
-        stopRun(now);
-      }
+      if (phase === 'TRACK') stepTracker(dt);
+      if (phase === 'TRACK' && ms >= (CONFIG.preMoveMs + CONFIG.moveMs)) stopRun(now);
     } else if (CONFIG.mode === 'grid'){
       const gridCueMs = 700;
       if (phase === 'CUE' && ms >= gridCueMs){
@@ -1025,20 +924,14 @@
       if (phase === 'CUE' || phase === 'TRACK') stepGrid(dt);
       if (phase === 'TRACK' && ms >= (gridCueMs + CONFIG.moveMs)) stopRun(now);
     } else {
-      // ✅ colors : infini
       if (now - lastColorChangeAt >= CONFIG.colorIntervalMs){
         lastColorChangeAt = now;
-
-        // évite de tirer 2x la même suite
-        let idx = (Math.random()*COLOR_SET.length)|0;
-        const pick = COLOR_SET[idx];
+        const pick = COLOR_SET[(Math.random()*COLOR_SET.length)|0];
         currentColor = pick.value;
         currentColorName = pick.name;
       }
-      // pas d'auto-stop
       phase = 'TRACK';
       phaseEl.textContent = phase;
-
       const elapsed = (now - t0) / 1000;
       timeEl.textContent = elapsed.toFixed(2);
       fillEl.style.width = '0%';
@@ -1048,7 +941,6 @@
     if (running) requestAnimationFrame(loop);
   }
 
-  // ===== Controls =====
   startBtn.addEventListener('click', () => safeAction(performance.now()));
   revealBtn.addEventListener('click', () => safeAction(performance.now()));
 
@@ -1056,7 +948,6 @@
     const now = performance.now();
     if (running) stopRun(now);
     else {
-      // en colors, stop = start
       if (CONFIG.mode === 'colors') startRun();
       else if (phase === 'STOP') reveal(now);
     }
