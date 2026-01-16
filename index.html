@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>GK Visual Lab — Xamax</title>
   <style>
     :root{
@@ -14,8 +14,20 @@
       --muted:#bdbdbd;
     }
     html, body { margin:0; height:100%; background:#070707; font-family: system-ui, -apple-system, Segoe UI, Roboto; color:var(--text); }
-    #wrap { display:flex; height:100%; align-items:center; justify-content:center; padding:12px; }
-    canvas { background:var(--bg); border:1px solid var(--stroke); border-radius:18px; touch-action: none; }
+    body{ overflow:hidden; }
+
+    /* ✅ Canvas plein écran sur toutes les machines */
+    canvas{
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background: var(--bg);
+      border: 0;
+      border-radius: 0;
+      touch-action: none;
+      display:block;
+    }
 
     #topbar{
       position: fixed; left: 12px; right:12px; top: 12px;
@@ -133,27 +145,11 @@
       font-size: 12px;
       white-space: pre-wrap;
     }
-
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.05);
-      font-size: 12px;
-      color: var(--text);
-      margin-top: 8px;
-      flex-wrap:wrap;
-    }
   </style>
 </head>
 
 <body>
-  <div id="wrap">
-    <canvas id="c" width="1200" height="720"></canvas>
-  </div>
+  <canvas id="c"></canvas>
 
   <div id="topbar">
     <div id="brand">
@@ -188,6 +184,7 @@
         <select id="mode">
           <option value="tracker">Tracker (MOT)</option>
           <option value="grid">Grille (visual chaos)</option>
+          <option value="colors">Couleurs (alternance)</option>
         </select>
       </div>
     </div>
@@ -326,6 +323,20 @@
       </div>
     </div>
 
+    <!-- Colors -->
+    <div class="row" id="colorsBlock" style="display:none">
+      <div class="rowline">
+        <div>
+          <div class="label">Intervalle changement (s)</div>
+          <div class="val"><span id="colIntVal"></span></div>
+        </div>
+        <input id="colorInterval" type="range" min="0.10" max="2.50" step="0.05" />
+      </div>
+      <div class="hint">
+        Défile à l'infini. Start = lance, Stop = fige. Tap/clic = Start/Stop.
+      </div>
+    </div>
+
     <div class="hint">
       Tap/clic sur le terrain = action. <kbd>ESPACE</kbd> aussi. <kbd>M</kbd> menu. <kbd>N</kbd> nouvel essai.
     </div>
@@ -353,7 +364,7 @@
   <div id="overlay">
     <div id="card">
       <h2>GK Visual Lab — prêt</h2>
-      <p>Start = tap/clic ou bouton. STOP est automatique. Ensuite Reveal (bouton ou tap/clic).</p>
+      <p>Start = tap/clic ou bouton. STOP est automatique (sauf mode Couleurs). Ensuite Reveal (bouton ou tap/clic).</p>
       <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
         <button class="btn primary" id="overlayStart">Démarrer</button>
         <button class="btn" id="overlayMenu">Ouvrir menu</button>
@@ -371,7 +382,7 @@
   if (LOGO_PATH) logoEl.src = LOGO_PATH; else logoEl.style.display = "none";
 
   const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
 
   const subtitleEl = document.getElementById('subtitle');
   const toggleBtn = document.getElementById('toggleBtn');
@@ -425,6 +436,10 @@
   const gridColorModeSel = document.getElementById('gridColorMode');
   const gridColorValEl = document.getElementById('gridColorVal');
 
+  const colorsBlock = document.getElementById('colorsBlock');
+  const colorIntervalSlider = document.getElementById('colorInterval');
+  const colIntValEl = document.getElementById('colIntVal');
+
   const scorePill = document.getElementById('scorePill');
   const rtLastEl = document.getElementById('rtLast');
   const rtBestEl = document.getElementById('rtBest');
@@ -439,13 +454,15 @@
     gamify: 'off',
 
     stimulus: 'color',
-    preMoveMs: 2000,     // ✅ stable au départ
+    preMoveMs: 2000,
     nDots: 10,
     nTargets: 1,
     chaos: 0.35,
 
     gridN: 5,
-    gridColorMode: 'multi', // ✅ multi | mono
+    gridColorMode: 'multi',
+
+    colorIntervalMs: 300, // ✅ mini-jeu couleurs (infinite)
   };
 
   let running = false;
@@ -467,10 +484,20 @@
   let rtSum = 0;
   let rtCount = 0;
 
-  const BG = '#0b0b0b';
   const DOT = '#e6e6e6';
-  const TARGET_CUE = '#e10600'; // rouge
-  const REVEAL_RING = '#34c759'; // contour vert
+  const TARGET_CUE = '#e10600';
+  const REVEAL_RING = '#34c759';
+
+  // ✅ Couleurs mini-jeu 3
+  const COLOR_SET = [
+    { name:'Blanc', value:'#FFFFFF' },
+    { name:'Bleu',  value:'#1E90FF' },
+    { name:'Rouge', value:'#E10600' },
+    { name:'Jaune', value:'#FFD400' },
+  ];
+  let currentColor = COLOR_SET[0].value;
+  let currentColorName = COLOR_SET[0].name;
+  let lastColorChangeAt = 0;
 
   function rand(min, max) { return Math.random() * (max - min) + min; }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -503,12 +530,16 @@
   }
 
   function updateActionButtons(){
-    revealBtn.style.display = (!running && phase === 'STOP') ? 'inline-flex' : 'none';
+    // Reveal seulement pour tracker/grid (pas pour colors)
+    const allowReveal = (CONFIG.mode !== 'colors');
+    revealBtn.style.display = (allowReveal && !running && phase === 'STOP') ? 'inline-flex' : 'none';
   }
 
   function syncUI(){
     modeSel.value = CONFIG.mode;
-    modeVal.textContent = CONFIG.mode === 'tracker' ? 'Tracker' : 'Grille';
+    modeVal.textContent =
+      CONFIG.mode === 'tracker' ? 'Tracker' :
+      CONFIG.mode === 'grid' ? 'Grille' : 'Couleurs';
     modeMini.textContent = modeVal.textContent;
 
     speedSlider.value = CONFIG.speed;
@@ -543,10 +574,19 @@
     gridColorModeSel.value = CONFIG.gridColorMode;
     gridColorValEl.textContent = (CONFIG.gridColorMode === 'mono') ? 'Mono' : 'Multi';
 
+    colorIntervalSlider.value = (CONFIG.colorIntervalMs/1000).toFixed(2);
+    colIntValEl.textContent = (CONFIG.colorIntervalMs/1000).toFixed(2);
+
     trackerBlock.style.display = (CONFIG.mode === 'tracker') ? 'block' : 'none';
     gridBlock.style.display = (CONFIG.mode === 'grid') ? 'block' : 'none';
+    colorsBlock.style.display = (CONFIG.mode === 'colors') ? 'block' : 'none';
 
-    subtitleEl.textContent = running ? 'En cours (tap/clic = Stop)' : 'Tap/clic = Start • Stop • Reveal';
+    // Subtitle logique
+    if (CONFIG.mode === 'colors'){
+      subtitleEl.textContent = running ? 'Couleurs: en cours (tap/clic = Stop)' : 'Couleurs: tap/clic = Start/Stop';
+    } else {
+      subtitleEl.textContent = running ? 'En cours (tap/clic = Stop)' : 'Tap/clic = Start • Stop • Reveal';
+    }
 
     updateScoreUI();
     updateActionButtons();
@@ -554,6 +594,7 @@
 
   function applyFromControls(){
     CONFIG.mode = modeSel.value;
+
     CONFIG.speed = parseInt(speedSlider.value, 10);
     CONFIG.moveMs = parseInt(moveSlider.value, 10) * 1000;
     CONFIG.size = parseInt(sizeSlider.value, 10);
@@ -570,6 +611,8 @@
     CONFIG.gridN = parseInt(gridSizeSel.value, 10);
     CONFIG.gridColorMode = gridColorModeSel.value;
 
+    CONFIG.colorIntervalMs = Math.round(parseFloat(colorIntervalSlider.value) * 1000);
+
     syncUI();
   }
 
@@ -577,33 +620,29 @@
     modeSel, speedSlider, moveSlider, sizeSlider,
     fixationSel, gamifySel,
     stimulusSel, preMoveSlider, nSlider, tSlider, chaosSlider,
-    gridSizeSel, gridColorModeSel
+    gridSizeSel, gridColorModeSel,
+    colorIntervalSlider
   ].forEach(el => el.addEventListener('input', applyFromControls));
 
   toggleBtn.addEventListener('click', () => drawer.classList.toggle('open'));
 
-  function resizeToFit(){
-    const topOffset = 84;
-    const bottomOffset = 120;
-    const sideOffset = 24;
-
-    const maxW = window.innerWidth - sideOffset;
-    const maxH = window.innerHeight - topOffset - bottomOffset;
-
-    const aspect = canvas.width / canvas.height;
-    let w = maxW;
-    let h = w / aspect;
-    if (h > maxH) { h = maxH; w = h * aspect; }
-
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
+  // ✅ Canvas vrai plein écran (pixels réels + DPI)
+  function resizeCanvas(){
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const w = Math.floor(window.innerWidth * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    canvas.width = w;
+    canvas.height = h;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(dpr, dpr); // on dessine en "CSS pixels"
+    draw(performance.now());
   }
-  window.addEventListener('resize', resizeToFit);
-  resizeToFit();
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('orientationchange', resizeCanvas);
 
   function buildTracker(){
     dots = [];
-    const W = canvas.width, H = canvas.height;
+    const W = window.innerWidth, H = window.innerHeight;
     for (let i=0;i<CONFIG.nDots;i++){
       const angle = rand(0, Math.PI*2);
       const sp = rand(CONFIG.speed*0.75, CONFIG.speed*1.25);
@@ -637,9 +676,9 @@
   function buildGrid(){
     grid = [];
     const N = CONFIG.gridN;
-    const W = canvas.width, H = canvas.height;
+    const W = window.innerWidth, H = window.innerHeight;
 
-    const pad = 18;
+    const pad = 24;
     const usableW = W - pad*2;
     const usableH = H - pad*2;
 
@@ -687,7 +726,14 @@
     resetGamifyTrial();
 
     if (CONFIG.mode === 'tracker') buildTracker();
-    else buildGrid();
+    else if (CONFIG.mode === 'grid') buildGrid();
+    else {
+      // colors
+      const pick = COLOR_SET[(Math.random()*COLOR_SET.length)|0];
+      currentColor = pick.value;
+      currentColorName = pick.name;
+      lastColorChangeAt = performance.now();
+    }
 
     draw(performance.now());
     syncUI();
@@ -698,9 +744,18 @@
     running = true;
     t0 = performance.now();
     last = t0;
-    phase = 'CUE'; // ✅ stable au départ
+    phase = (CONFIG.mode === 'colors') ? 'TRACK' : 'CUE';
     phaseEl.textContent = phase;
     resetGamifyTrial();
+
+    if (CONFIG.mode === 'colors'){
+      lastColorChangeAt = t0;
+      // on force une première couleur aléatoire au start
+      const pick = COLOR_SET[(Math.random()*COLOR_SET.length)|0];
+      currentColor = pick.value;
+      currentColorName = pick.name;
+    }
+
     requestAnimationFrame(loop);
     syncUI();
   }
@@ -738,6 +793,16 @@
 
   function handleAction(now){
     if (running) { stopRun(now); return; }
+
+    // mode colors : Start/Stop en boucle, pas de reveal
+    if (CONFIG.mode === 'colors'){
+      if (phase === 'STOP' || phase === 'READY') { startRun(); return; }
+      if (phase === 'REVEAL') { newTrial(); return; }
+      newTrial();
+      return;
+    }
+
+    // tracker/grid classique
     if (phase === 'STOP') { reveal(now); return; }
     if (phase === 'REVEAL') { newTrial(); return; }
     if (phase === 'READY') { startRun(); return; }
@@ -745,7 +810,7 @@
   }
 
   function stepTracker(dt){
-    const W = canvas.width, H = canvas.height;
+    const W = window.innerWidth, H = window.innerHeight;
     for (const d of dots){
       d.vx += rand(-1,1)*CONFIG.chaos*60;
       d.vy += rand(-1,1)*CONFIG.chaos*60;
@@ -766,8 +831,8 @@
   }
 
   function stepGrid(dt){
-    const W = canvas.width, H = canvas.height;
-    const pad = 22;
+    const W = window.innerWidth, H = window.innerHeight;
+    const pad = 28;
     for (const cell of grid){
       cell.x += cell.vx*dt;
       cell.y += cell.vy*dt;
@@ -781,8 +846,8 @@
 
   function drawFixationCross(){
     if (CONFIG.fixation !== 'on') return;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
     const s = Math.max(10, Math.floor(CONFIG.size * 1.1));
     ctx.save();
     ctx.globalAlpha = 0.78;
@@ -796,16 +861,30 @@
   }
 
   function draw(now){
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0,0,W,H);
-    ctx.fillStyle = BG;
+    const W = window.innerWidth, H = window.innerHeight;
+
+    // Mode 3: plein écran couleurs
+    if (CONFIG.mode === 'colors'){
+      ctx.fillStyle = currentColor;
+      ctx.fillRect(0,0,W,H);
+
+      // petite info discrète
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto';
+      ctx.fillText(`Couleur: ${currentColorName}`, 18, H - 22);
+
+      drawFixationCross();
+      return;
+    }
+
+    // Tracker/grid classiques
+    ctx.fillStyle = '#0b0b0b';
     ctx.fillRect(0,0,W,H);
 
     if (running){
       const elapsed = (now - t0) / 1000;
       timeEl.textContent = elapsed.toFixed(2);
 
-      // progress = (preMove + move)
       const cueMs = (CONFIG.mode === 'tracker') ? CONFIG.preMoveMs : 700;
       const totalMsToStop = cueMs + CONFIG.moveMs;
       const p = clamp((now - t0) / totalMsToStop, 0, 1);
@@ -830,15 +909,11 @@
 
     for (const d of dots){
       let color = DOT;
-
       const isTarget = targetIds.includes(d.id);
 
-      // CUE stable : cible(s) visibles
       if (showCue && isTarget && CONFIG.stimulus === 'color'){
         color = TARGET_CUE;
       }
-
-      // Reveal : rouge + contour vert
       if (phase === 'REVEAL' && isTarget){
         color = TARGET_CUE;
       }
@@ -857,7 +932,6 @@
         ctx.stroke();
       }
 
-      // Numéros visibles uniquement pendant CUE stable (plus lisibles)
       if (showCue && CONFIG.stimulus === 'number'){
         ctx.save();
         ctx.textAlign = 'center';
@@ -881,20 +955,23 @@
     ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto';
 
     if (phase === 'CUE'){
-      if (CONFIG.stimulus === 'color') ctx.fillText('Mémorise les cibles rouges (stable)', 24, canvas.height-24);
-      else ctx.fillText('Mémorise les numéros des cibles (stable)', 24, canvas.height-24);
+      if (CONFIG.stimulus === 'color') ctx.fillText('Mémorise les cibles rouges (stable)', 24, window.innerHeight-24);
+      else ctx.fillText('Mémorise les numéros des cibles (stable)', 24, window.innerHeight-24);
     } else if (phase === 'TRACK'){
-      ctx.fillText('Tracking — mouvement', 24, canvas.height-24);
+      ctx.fillText('Tracking — mouvement', 24, window.innerHeight-24);
     } else if (phase === 'REVEAL'){
-      ctx.fillText('Cibles = rouge + contour vert', 24, canvas.height-24);
+      ctx.fillText('Cibles = rouge + contour vert', 24, window.innerHeight-24);
     }
   }
 
   function drawGrid(){
     for (const cell of grid){
+      const w = CONFIG.size*4.0;
+      const h = CONFIG.size*2.5;
+
+      // roundRect simple (compatible)
       ctx.beginPath();
-      ctx.roundRect(cell.x - (CONFIG.size*2.0), cell.y - (CONFIG.size*1.25),
-                    CONFIG.size*4.0, CONFIG.size*2.5, 14);
+      roundRect(ctx, cell.x - w/2, cell.y - h/2, w, h, 14);
       ctx.fillStyle = 'rgba(255,255,255,.05)';
       ctx.fill();
       ctx.lineWidth = 1.2;
@@ -911,6 +988,16 @@
     ctx.textBaseline = 'alphabetic';
   }
 
+  function roundRect(c, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y, x+w, y+h, r);
+    c.arcTo(x+w, y+h, x, y+h, r);
+    c.arcTo(x, y+h, x, y, r);
+    c.arcTo(x, y, x+w, y, r);
+    c.closePath();
+  }
+
   function loop(now){
     if (!running) { draw(now); return; }
 
@@ -919,22 +1006,17 @@
     const ms = now - t0;
 
     if (CONFIG.mode === 'tracker'){
-      // ✅ stable pendant preMoveMs
       if (phase === 'CUE' && ms >= CONFIG.preMoveMs){
         phase = 'TRACK';
         phaseEl.textContent = phase;
       }
-
-      // mouvement seulement en TRACK
       if (phase === 'TRACK'){
         stepTracker(dt);
       }
-
-      // stop à preMoveMs + moveMs
       if (phase === 'TRACK' && ms >= (CONFIG.preMoveMs + CONFIG.moveMs)){
         stopRun(now);
       }
-    } else {
+    } else if (CONFIG.mode === 'grid'){
       const gridCueMs = 700;
       if (phase === 'CUE' && ms >= gridCueMs){
         phase = 'TRACK';
@@ -942,6 +1024,24 @@
       }
       if (phase === 'CUE' || phase === 'TRACK') stepGrid(dt);
       if (phase === 'TRACK' && ms >= (gridCueMs + CONFIG.moveMs)) stopRun(now);
+    } else {
+      // ✅ colors : infini
+      if (now - lastColorChangeAt >= CONFIG.colorIntervalMs){
+        lastColorChangeAt = now;
+
+        // évite de tirer 2x la même suite
+        let idx = (Math.random()*COLOR_SET.length)|0;
+        const pick = COLOR_SET[idx];
+        currentColor = pick.value;
+        currentColorName = pick.name;
+      }
+      // pas d'auto-stop
+      phase = 'TRACK';
+      phaseEl.textContent = phase;
+
+      const elapsed = (now - t0) / 1000;
+      timeEl.textContent = elapsed.toFixed(2);
+      fillEl.style.width = '0%';
     }
 
     draw(now);
@@ -955,7 +1055,11 @@
   stopBtn.addEventListener('click', () => {
     const now = performance.now();
     if (running) stopRun(now);
-    else if (phase === 'STOP') reveal(now);
+    else {
+      // en colors, stop = start
+      if (CONFIG.mode === 'colors') startRun();
+      else if (phase === 'STOP') reveal(now);
+    }
   });
 
   overlayStart.addEventListener('click', () => startRun());
@@ -977,20 +1081,6 @@
     if (k === 'm') drawer.classList.toggle('open');
     if (k === 'n') newTrial();
   });
-
-  if (!ctx.roundRect){
-    CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
-      r = Math.min(r, w/2, h/2);
-      this.beginPath();
-      this.moveTo(x+r, y);
-      this.arcTo(x+w, y, x+w, y+h, r);
-      this.arcTo(x+w, y+h, x, y+h, r);
-      this.arcTo(x, y+h, x, y, r);
-      this.arcTo(x, y, x+w, y, r);
-      this.closePath();
-      return this;
-    };
-  }
 
   window.addEventListener('error', (ev) => {
     setError(`Erreur JS détectée:\n${ev.message}\n${ev.filename}:${ev.lineno}`);
@@ -1015,10 +1105,13 @@
 
     gridSizeSel.value = String(CONFIG.gridN);
     gridColorModeSel.value = CONFIG.gridColorMode;
+
+    colorIntervalSlider.value = (CONFIG.colorIntervalMs/1000).toFixed(2);
   }
 
   initDefaults();
   applyFromControls();
+  resizeCanvas();
   newTrial();
 })();
 </script>
